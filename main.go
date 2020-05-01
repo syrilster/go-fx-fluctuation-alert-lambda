@@ -64,7 +64,7 @@ func Handler(ctx context.Context, request CustomEvent) error {
 
 	resp := unMarshallExchangeRate(exchangeResponse)
 
-	if resp.amount >= 48 || resp.amount <= 48 {
+	if resp.amount >= 49 || resp.amount <= 48 {
 		contextLogger.Infof("FX Alert threshold satisfied")
 		sendEmail = true
 	} else {
