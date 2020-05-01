@@ -52,6 +52,8 @@ func init() {
 //Handler func for lambda
 func Handler(ctx context.Context, request CustomEvent) error {
 	contextLogger := log.WithContext(ctx)
+	contextLogger.Infof("Inside the lambda handler func")
+
 	var sendEmail bool
 
 	exchangeResponse, err := GetExchangeRate(ctx)
@@ -63,36 +65,47 @@ func Handler(ctx context.Context, request CustomEvent) error {
 	resp := unMarshallExchangeRate(exchangeResponse)
 
 	if resp.amount >= 48 || resp.amount <= 48 {
+		contextLogger.Infof("FX Alert threshold satisfied")
 		sendEmail = true
 	} else {
 		fmt.Printf("Current FX amount %v", resp.amount)
 	}
 
 	if sendEmail {
-		emailParams := &ses.SendEmailInput{
-			Message: &ses.Message{
-				Subject: &ses.Content{
-					Data: aws.String(fromCurrency + " to " + toCurrency + " Alert"),
-				},
-				Body: &ses.Body{
-					Text: &ses.Content{
-						Data: aws.String(fromCurrency + " to " + toCurrency + " value is HIGH. Current value is " + fmt.Sprintf("%f", resp.amount)),
-					},
-				},
-			},
-			Destination: &ses.Destination{
-				ToAddresses: []*string{aws.String(toEmail)},
-			},
-			Source: aws.String(toEmail),
-		}
-
-		_, err := emailClient.SendEmail(emailParams)
+		contextLogger.Infof("Attempting to send email notification")
+		err := SesSendEmail(ctx, resp.amount)
 		if err != nil {
-			contextLogger.WithError(err).Error("error when sending email")
 			return errors.New("error when sending email")
 		}
 	}
 
+	return nil
+}
+
+func SesSendEmail(ctx context.Context, amount float64) error {
+	contextLogger := log.WithContext(ctx)
+	emailParams := &ses.SendEmailInput{
+		Message: &ses.Message{
+			Subject: &ses.Content{
+				Data: aws.String(fromCurrency + " to " + toCurrency + " Alert"),
+			},
+			Body: &ses.Body{
+				Text: &ses.Content{
+					Data: aws.String(fromCurrency + " to " + toCurrency + " value is HIGH. Current value is " + fmt.Sprintf("%f", amount)),
+				},
+			},
+		},
+		Destination: &ses.Destination{
+			ToAddresses: []*string{aws.String(toEmail)},
+		},
+		Source: aws.String(toEmail),
+	}
+
+	_, err := emailClient.SendEmail(emailParams)
+	if err != nil {
+		contextLogger.WithError(err).Error("error when sending email")
+		return err
+	}
 	return nil
 }
 
