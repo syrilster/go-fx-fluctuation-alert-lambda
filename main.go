@@ -5,15 +5,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	log "github.com/sirupsen/logrus"
+	"hash/fnv"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
+	"time"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 	"github.com/aws/aws-sdk-go/service/ses"
 )
 
@@ -34,15 +39,22 @@ type Response struct {
 	amount float64
 }
 
+type Item struct {
+	HashString    string  `json:"hash"`
+	CurrencyValue float64 `json:"currency_value"`
+	Expires       int64   `json:"expires_at"`
+}
+
 var toEmail string
-var appId string
+var appID string
 var fromCurrency string
 var toCurrency string
 var emailClient *ses.SES
+var tableName string = "fx_rate"
 
 func init() {
 	toEmail = os.Getenv("TO_EMAIL")
-	appId = os.Getenv("APP_ID")
+	appID = os.Getenv("APP_ID")
 	fromCurrency = os.Getenv("FROM_CURRENCY")
 	toCurrency = os.Getenv("TO_CURRENCY")
 
@@ -55,8 +67,9 @@ func Handler(ctx context.Context, request CustomEvent) error {
 	contextLogger.Infof("Inside the lambda handler func")
 
 	var sendEmail bool
+	var amount float64
 
-	exchangeResponse, err := GetExchangeRate(ctx)
+	exchangeResponse, err := getExchangeRate(ctx)
 	if err != nil {
 		contextLogger.WithError(err).Error("error when getting the exchange rate")
 		return errors.New("error when getting the exchange rate")
@@ -66,14 +79,43 @@ func Handler(ctx context.Context, request CustomEvent) error {
 
 	if resp.amount >= 49 || resp.amount <= 48 {
 		contextLogger.Infof("FX Alert threshold satisfied")
-		sendEmail = true
+		t := time.Now()
+		hash := hash(t.Format("2006-01-02"))
+		contextLogger.Infof("hash is %v", hash)
+		hashString := fmt.Sprint(hash)
+		dbItem, err := getItem(hashString)
+		if err != nil {
+			contextLogger.Error("error key not found in DB")
+			contextLogger.Infof("Creating an item in DB with hash val")
+			createItem(hashString, resp.amount)
+			sendEmail = true
+		}
+
+		if dbItem != nil {
+			contextLogger.Infof("Found item in DB by hash value")
+			amount = dbItem.CurrencyValue
+		} else {
+			contextLogger.Infof("trying to retrieve value from DB after create")
+			record, err := getItem(hashString)
+			if err != nil {
+				contextLogger.Infof("Failed to get the rec from dynamo. This is unusual !!")
+				panic(fmt.Sprintf("Failed to get the rec from DB, %v", err))
+			}
+			amount = record.CurrencyValue
+		}
+
+		if thresholdExceedsPercentVal(resp.amount, amount) {
+			contextLogger.Infof("FX Alert threshold diff is greater than 30%")
+			sendEmail = true
+		}
+
 	} else {
 		fmt.Printf("Current FX amount %v", resp.amount)
 	}
 
 	if sendEmail {
 		contextLogger.Infof("Attempting to send email notification")
-		err := SesSendEmail(ctx, resp.amount)
+		err := sesSendEmail(ctx, resp.amount)
 		if err != nil {
 			return errors.New("error when sending email")
 		}
@@ -82,7 +124,81 @@ func Handler(ctx context.Context, request CustomEvent) error {
 	return nil
 }
 
-func SesSendEmail(ctx context.Context, amount float64) error {
+func thresholdExceedsPercentVal(currentVal, existingVal float64) bool {
+	fmt.Println("Inside thresholdExceedsPercentVal func to check if threshold is greter than 1.2%")
+	diff := float64(currentVal - existingVal)
+	delta := (diff / float64(existingVal)) * 100
+	return delta > 1.2
+}
+
+func createItem(hash string, amount float64) {
+	fmt.Println("Inside the dynamo create item func")
+	svc := dynamodb.New(session.New(aws.NewConfig().WithRegion("ap-south-1")))
+	expires := time.Now().Add(time.Duration(32400) * time.Second).Unix()
+	rec := Item{
+		hash,
+		amount,
+		expires,
+	}
+
+	av, err := dynamodbattribute.MarshalMap(rec)
+	if err != nil {
+		panic(fmt.Sprintf("failed to DynamoDB marshal Record, %v", err))
+	}
+
+	params := &dynamodb.PutItemInput{
+		Item:      av,
+		TableName: aws.String(tableName),
+	}
+
+	_, err = svc.PutItem(params)
+	if err != nil {
+		fmt.Println(err.Error())
+		panic(fmt.Sprintf("got error calling put item, %v", err))
+	}
+
+}
+
+func getItem(hash string) (*Item, error) {
+	fmt.Println("Inside the dynamo get item func")
+	item := &Item{}
+	svc := dynamodb.New(session.New(aws.NewConfig().WithRegion("ap-south-1")))
+
+	input := &dynamodb.GetItemInput{
+		Key: map[string]*dynamodb.AttributeValue{
+			"hash": {
+				S: aws.String(hash),
+			},
+		},
+		TableName: aws.String(tableName),
+	}
+
+	result, err := svc.GetItem(input)
+	if err != nil {
+		fmt.Println(err.Error())
+		return nil, err
+	}
+
+	if len(result.Item) == 0 {
+		return nil, fmt.Errorf("Item not found")
+	}
+
+	err = dynamodbattribute.UnmarshalMap(result.Item, &item)
+	if err != nil {
+		fmt.Println(err.Error())
+		return nil, err
+	}
+
+	return item, nil
+}
+
+func hash(s string) uint32 {
+	h := fnv.New32a()
+	h.Write([]byte(s))
+	return h.Sum32()
+}
+
+func sesSendEmail(ctx context.Context, amount float64) error {
 	contextLogger := log.WithContext(ctx)
 	emailParams := &ses.SendEmailInput{
 		Message: &ses.Message{
@@ -109,7 +225,7 @@ func SesSendEmail(ctx context.Context, amount float64) error {
 	return nil
 }
 
-func GetExchangeRate(ctx context.Context) (*ExchangeResponse, error) {
+func getExchangeRate(ctx context.Context) (*ExchangeResponse, error) {
 	var httpClient = &http.Client{}
 	contextLogger := log.WithContext(ctx)
 
@@ -187,5 +303,5 @@ func getRateForCurrency(rates map[string]interface{}, currency string) float64 {
 }
 
 func buildCurrencyExchangeEndpoint() string {
-	return "https://openexchangerates.org/api/latest.json" + "?app_id=" + appId
+	return "https://openexchangerates.org/api/latest.json" + "?app_id=" + appID
 }
