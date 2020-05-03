@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"hash/fnv"
 	"io/ioutil"
+	"math"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -50,15 +52,32 @@ var appID string
 var fromCurrency string
 var toCurrency string
 var emailClient *ses.SES
+var thresholdPercentage float64
+var currLowerBound float64
+var currUpperBound float64
+
 var tableName string = "fx_rate"
+var awsRegion string = "ap-south-1"
 
 func init() {
+	var err error
 	toEmail = os.Getenv("TO_EMAIL")
 	appID = os.Getenv("APP_ID")
 	fromCurrency = os.Getenv("FROM_CURRENCY")
 	toCurrency = os.Getenv("TO_CURRENCY")
+	if thresholdPercentage, err = strconv.ParseFloat(os.Getenv("THRESHOLD_PERCENT"), 64); err != nil {
+		fmt.Println("error while loading env var THRESHOLD_PERCENT ", err)
+	}
 
-	emailClient = ses.New(session.New(), aws.NewConfig().WithRegion("ap-south-1"))
+	if currLowerBound, err = strconv.ParseFloat(os.Getenv("LOWER_BOUND"), 64); err != nil {
+		fmt.Println("error while loading env var LOWER_BOUND ", err)
+	}
+
+	if currUpperBound, err = strconv.ParseFloat(os.Getenv("UPPER_BOUND"), 64); err != nil {
+		fmt.Println("error while loading env var UPPER_BOUND ", err)
+	}
+
+	emailClient = ses.New(session.New(), aws.NewConfig().WithRegion(awsRegion))
 }
 
 //Handler func for lambda
@@ -77,7 +96,7 @@ func Handler(ctx context.Context, request CustomEvent) error {
 
 	resp := unMarshallExchangeRate(exchangeResponse)
 
-	if resp.amount >= 49 || resp.amount <= 48 {
+	if resp.amount >= currUpperBound || resp.amount <= currLowerBound {
 		contextLogger.Infof("FX Alert threshold satisfied")
 		t := time.Now()
 		hash := hash(t.Format("2006-01-02"))
@@ -125,15 +144,15 @@ func Handler(ctx context.Context, request CustomEvent) error {
 }
 
 func thresholdExceedsPercentVal(currentVal, existingVal float64) bool {
-	fmt.Println("Inside thresholdExceedsPercentVal func to check if threshold is greter than 1.2%")
-	diff := float64(currentVal - existingVal)
+	fmt.Println("Inside threshold func to check if threshold is greater than set percentage i.e ", thresholdPercentage)
+	diff := math.Abs(float64(currentVal - existingVal))
 	delta := (diff / float64(existingVal)) * 100
-	return delta > 1.2
+	return delta > thresholdPercentage
 }
 
 func createItem(hash string, amount float64) {
 	fmt.Println("Inside the dynamo create item func")
-	svc := dynamodb.New(session.New(aws.NewConfig().WithRegion("ap-south-1")))
+	svc := dynamodb.New(session.New(aws.NewConfig().WithRegion(awsRegion)))
 	expires := time.Now().Add(time.Duration(32400) * time.Second).Unix()
 	rec := Item{
 		hash,
