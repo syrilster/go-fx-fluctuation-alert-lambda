@@ -103,8 +103,8 @@ func Handler(ctx context.Context, request CustomEvent) error {
 			emailText = "LOW"
 		}
 
-		contextLogger.Infof("hash is %v", hash())
 		hashString := fmt.Sprint(hash())
+		contextLogger.Infof("computed hash is %v", hashString)
 		dbItem, err := getItem(hashString)
 		if err != nil {
 			contextLogger.Error("error key not found in DB")
