@@ -58,6 +58,7 @@ var currUpperBound float64
 
 var tableName string = "fx_rate"
 var awsRegion string = "ap-south-1"
+var emailText string = "HIGH"
 
 func init() {
 	var err error
@@ -83,7 +84,7 @@ func init() {
 //Handler func for lambda
 func Handler(ctx context.Context, request CustomEvent) error {
 	contextLogger := log.WithContext(ctx)
-	contextLogger.Infof("Inside the lambda handler func")
+	contextLogger.Infof("Inside the lambda handler func at date: ", getLocalTime())
 
 	var sendEmail bool
 	var amount float64
@@ -98,10 +99,12 @@ func Handler(ctx context.Context, request CustomEvent) error {
 
 	if resp.amount >= currUpperBound || resp.amount <= currLowerBound {
 		contextLogger.Infof("FX Alert threshold satisfied")
-		t := time.Now()
-		hash := hash(t.Format("2006-01-02"))
-		contextLogger.Infof("hash is %v", hash)
-		hashString := fmt.Sprint(hash)
+		if resp.amount <= currLowerBound {
+			emailText = "LOW"
+		}
+
+		contextLogger.Infof("hash is %v", hash())
+		hashString := fmt.Sprint(hash())
 		dbItem, err := getItem(hashString)
 		if err != nil {
 			contextLogger.Error("error key not found in DB")
@@ -181,7 +184,7 @@ func createItem(hash string, amount float64) {
 func getItem(hash string) (*Item, error) {
 	fmt.Println("Inside the dynamo get item func")
 	item := &Item{}
-	svc := dynamodb.New(session.New(aws.NewConfig().WithRegion("ap-south-1")))
+	svc := dynamodb.New(session.New(aws.NewConfig().WithRegion(awsRegion)))
 
 	input := &dynamodb.GetItemInput{
 		Key: map[string]*dynamodb.AttributeValue{
@@ -211,9 +214,16 @@ func getItem(hash string) (*Item, error) {
 	return item, nil
 }
 
-func hash(s string) uint32 {
+func hash() uint32 {
+	loc, err := time.LoadLocation("Asia/Kolkata")
+	if err != nil {
+		panic(fmt.Sprintf("Failed to load local time for India, %v", err))
+	}
+	t := time.Now().In(loc)
+	localTime := t.Format("Mon Jan 2")
+	//Compute the hash based on date
 	h := fnv.New32a()
-	h.Write([]byte(s))
+	h.Write([]byte(localTime))
 	return h.Sum32()
 }
 
@@ -226,7 +236,7 @@ func sesSendEmail(ctx context.Context, amount float64) error {
 			},
 			Body: &ses.Body{
 				Text: &ses.Content{
-					Data: aws.String(fromCurrency + " to " + toCurrency + " value is HIGH. Current value is " + fmt.Sprintf("%f", amount)),
+					Data: aws.String(fromCurrency + " to " + toCurrency + " value is " + emailText + ". Current value is " + fmt.Sprintf("%f", amount)),
 				},
 			},
 		},
@@ -323,4 +333,14 @@ func getRateForCurrency(rates map[string]interface{}, currency string) float64 {
 
 func buildCurrencyExchangeEndpoint() string {
 	return "https://openexchangerates.org/api/latest.json" + "?app_id=" + appID
+}
+
+func getLocalTime() string {
+	loc, err := time.LoadLocation("Australia/Melbourne")
+	if err != nil {
+		panic(fmt.Sprintf("Failed to load local time for Melbourne, %v", err))
+	}
+	t := time.Now().In(loc)
+	localTime := t.Format("Mon Jan 2 15:04:05")
+	return localTime
 }
