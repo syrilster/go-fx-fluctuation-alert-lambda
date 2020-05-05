@@ -84,21 +84,21 @@ func init() {
 //Handler func for lambda
 func Handler(ctx context.Context, request CustomEvent) error {
 	contextLogger := log.WithContext(ctx)
-	contextLogger.Infof("Inside the lambda handler func at date: ", getLocalTime())
+	contextLogger.Infof("Inside the lambda handler at date: ", getLocalTime())
 
 	var sendEmail bool
 	var amount float64
 
 	exchangeResponse, err := getExchangeRate(ctx)
 	if err != nil {
-		contextLogger.WithError(err).Error("error when getting the exchange rate")
-		return errors.New("error when getting the exchange rate")
+		contextLogger.WithError(err).Error("Error when getting the exchange rate")
+		return errors.New("Error when getting the exchange rate")
 	}
 
 	resp := unMarshallExchangeRate(exchangeResponse)
 
 	if resp.amount >= currUpperBound || resp.amount <= currLowerBound {
-		contextLogger.Infof("FX Alert threshold satisfied")
+		contextLogger.Infof("FX threshold satisfied")
 		if resp.amount <= currLowerBound {
 			emailText = "LOW"
 		}
@@ -107,8 +107,8 @@ func Handler(ctx context.Context, request CustomEvent) error {
 		contextLogger.Infof("computed hash is %v", hashString)
 		dbItem, err := getItem(hashString)
 		if err != nil {
-			contextLogger.Error("error key not found in DB")
-			contextLogger.Infof("Creating an item in DB with hash val")
+			contextLogger.Error("key not found in DynamoDB")
+			contextLogger.Infof("Creating an item in Dynamo with computed hash")
 			createItem(hashString, resp.amount)
 			sendEmail = true
 		}
@@ -117,7 +117,7 @@ func Handler(ctx context.Context, request CustomEvent) error {
 			contextLogger.Infof("Found item in DB by hash value")
 			amount = dbItem.CurrencyValue
 		} else {
-			contextLogger.Infof("trying to retrieve value from DB after create")
+			contextLogger.Infof("Trying to retrieve value from DB after create")
 			record, err := getItem(hashString)
 			if err != nil {
 				contextLogger.Infof("Failed to get the rec from dynamo. This is unusual !!")
@@ -132,7 +132,8 @@ func Handler(ctx context.Context, request CustomEvent) error {
 		}
 
 	} else {
-		fmt.Printf("Current FX amount %v", resp.amount)
+		contextLogger.Infof("FX Alert threshold not met")
+		contextLogger.Infof("Current FX rate %v", resp.amount)
 	}
 
 	if sendEmail {
@@ -150,6 +151,7 @@ func thresholdExceedsPercentVal(currentVal, existingVal float64) bool {
 	fmt.Println("Inside threshold func to check if threshold is greater than set percentage i.e ", thresholdPercentage)
 	diff := math.Abs(float64(currentVal - existingVal))
 	delta := (diff / float64(existingVal)) * 100
+	fmt.Println("percent diff with prev value is: ", delta)
 	return delta > thresholdPercentage
 }
 
