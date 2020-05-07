@@ -29,16 +29,13 @@ func main() {
 }
 
 type ExchangeResponse struct {
-	Base  string                 `json:"base"`
-	Rates map[string]interface{} `json:"rates"`
+	From   string `json:"from"`
+	To     string `json:"to"`
+	FXRate string `json:"conversion_multiple"`
 }
 
 type CustomEvent struct {
 	Name string `json:"name"`
-}
-
-type Response struct {
-	amount float64
 }
 
 type Item struct {
@@ -48,7 +45,6 @@ type Item struct {
 }
 
 var toEmail string
-var appID string
 var fromCurrency string
 var toCurrency string
 var emailClient *ses.SES
@@ -63,7 +59,6 @@ var emailText string = "HIGH"
 func init() {
 	var err error
 	toEmail = os.Getenv("TO_EMAIL")
-	appID = os.Getenv("APP_ID")
 	fromCurrency = os.Getenv("FROM_CURRENCY")
 	toCurrency = os.Getenv("TO_CURRENCY")
 	if thresholdPercentage, err = strconv.ParseFloat(os.Getenv("THRESHOLD_PERCENT"), 64); err != nil {
@@ -88,6 +83,7 @@ func Handler(ctx context.Context, request CustomEvent) error {
 
 	var sendEmail bool
 	var amount float64
+	var fxAmount float64
 
 	exchangeResponse, err := getExchangeRate(ctx)
 	if err != nil {
@@ -95,11 +91,14 @@ func Handler(ctx context.Context, request CustomEvent) error {
 		return errors.New("Error when getting the exchange rate")
 	}
 
-	resp := unMarshallExchangeRate(exchangeResponse)
+	fxAmount, err = strconv.ParseFloat(exchangeResponse.FXRate, 64)
+	if err != nil {
+		return errors.New("Error during un marshalling the FX rate")	
+	}
 
-	if resp.amount >= currUpperBound || resp.amount <= currLowerBound {
+	if fxAmount >= currUpperBound || fxAmount <= currLowerBound {
 		contextLogger.Infof("FX threshold satisfied")
-		if resp.amount <= currLowerBound {
+		if fxAmount <= currLowerBound {
 			emailText = "LOW"
 		}
 
@@ -109,7 +108,7 @@ func Handler(ctx context.Context, request CustomEvent) error {
 		if err != nil {
 			contextLogger.Error("key not found in DynamoDB")
 			contextLogger.Infof("Creating an item in Dynamo with computed hash")
-			createItem(hashString, resp.amount)
+			createItem(hashString, fxAmount)
 			sendEmail = true
 		}
 
@@ -126,19 +125,19 @@ func Handler(ctx context.Context, request CustomEvent) error {
 			amount = record.CurrencyValue
 		}
 
-		if thresholdExceedsPercentVal(resp.amount, amount) {
+		if thresholdExceedsPercentVal(fxAmount, amount) {
 			contextLogger.Infof("FX Alert threshold diff is greater than 30%")
 			sendEmail = true
 		}
 
 	} else {
 		contextLogger.Infof("FX Alert threshold not met")
-		contextLogger.Infof("Current FX rate %v", resp.amount)
+		contextLogger.Infof("Current FX rate %v", fxAmount)
 	}
 
 	if sendEmail {
 		contextLogger.Infof("Attempting to send email notification")
-		err := sesSendEmail(ctx, resp.amount)
+		err := sesSendEmail(ctx, fxAmount)
 		if err != nil {
 			return errors.New("error when sending email")
 		}
@@ -297,31 +296,6 @@ func getExchangeRate(ctx context.Context) (*ExchangeResponse, error) {
 	return response, nil
 }
 
-func unMarshallExchangeRate(resp *ExchangeResponse) *Response {
-	var fromCurrency = fromCurrency
-	var toCurrency = toCurrency
-	var conversionMultiple float64
-	var exchangeRate float64
-	if strings.EqualFold(fromCurrency, "USD") {
-		exchangeRate = getRateForCurrency(resp.Rates, toCurrency)
-		conversionMultiple = exchangeRate
-	} else if strings.EqualFold(toCurrency, "USD") {
-		exchangeRate = getRateForCurrency(resp.Rates, fromCurrency)
-		conversionMultiple = float64(1) / exchangeRate
-	} else {
-		// FromCurrency to USD and then USD to toCurrency
-		exchangeRate = getRateForCurrency(resp.Rates, toCurrency)
-		usdToFromCurrency := getRateForCurrency(resp.Rates, fromCurrency)
-		toCurrencyToUSD := float64(1) / exchangeRate
-		foreignCurrencyFactor := float64(1) / usdToFromCurrency
-		conversionMultiple = foreignCurrencyFactor / toCurrencyToUSD
-	}
-
-	return &Response{
-		amount: conversionMultiple,
-	}
-}
-
 func getRateForCurrency(rates map[string]interface{}, currency string) float64 {
 	var exchangeRate float64
 	for key, rate := range rates {
@@ -334,8 +308,8 @@ func getRateForCurrency(rates map[string]interface{}, currency string) float64 {
 }
 
 func buildCurrencyExchangeEndpoint() string {
-	return "https://openexchangerates.org/api/latest.json" + "?app_id=" + appID
-}
+	return "http://ec2-13-234-37-255.ap-south-1.compute.amazonaws.com/v1/currency-exchange/from/" + fromCurrency + "/to/" + toCurrency
+ }
 
 func getLocalTime() string {
 	loc, err := time.LoadLocation("Australia/Melbourne")
