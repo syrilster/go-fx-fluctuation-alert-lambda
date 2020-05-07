@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -294,17 +293,6 @@ func getExchangeRate(ctx context.Context) (*ExchangeResponse, error) {
 	}
 
 	return response, nil
-}
-
-func getRateForCurrency(rates map[string]interface{}, currency string) float64 {
-	var exchangeRate float64
-	for key, rate := range rates {
-		if strings.EqualFold(key, currency) {
-			exchangeRate = rate.(float64)
-			break
-		}
-	}
-	return exchangeRate
 }
 
 func buildCurrencyExchangeEndpoint() string {
