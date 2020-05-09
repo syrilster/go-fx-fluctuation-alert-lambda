@@ -156,7 +156,7 @@ func thresholdExceedsPercentVal(currentVal, existingVal float64) bool {
 func createItem(hash string, amount float64) {
 	fmt.Println("Inside the dynamo create item func")
 	svc := dynamodb.New(session.New(aws.NewConfig().WithRegion(awsRegion)))
-	expires := time.Now().Add(time.Duration(32400) * time.Second).Unix()
+	expires := getExpiryTime()
 	rec := Item{
 		hash,
 		amount,
@@ -307,4 +307,14 @@ func getLocalTime() string {
 	t := time.Now().In(loc)
 	localTime := t.Format("Mon Jan 2 15:04:05")
 	return localTime
+}
+
+func getExpiryTime() int64 {
+	fmt.Print("Calculating expiry time ")
+	loc, err := time.LoadLocation("Asia/Kolkata")
+	if err != nil {
+		panic(fmt.Sprintf("Failed to load local time for India, %v", err))
+	}
+	t := time.Now().In(loc)
+	return t.Add(time.Duration(32400) * time.Second).Unix()
 }
