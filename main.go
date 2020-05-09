@@ -81,7 +81,7 @@ func Handler(ctx context.Context, request CustomEvent) error {
 	contextLogger.Infof("Inside the lambda handler at date: ", getLocalTime())
 
 	var sendEmail bool
-	var amount float64
+	var dbAmount float64
 	var fxAmount float64
 
 	exchangeResponse, err := getExchangeRate(ctx)
@@ -92,11 +92,12 @@ func Handler(ctx context.Context, request CustomEvent) error {
 
 	fxAmount, err = strconv.ParseFloat(exchangeResponse.FXRate, 64)
 	if err != nil {
-		return errors.New("Error during un marshalling the FX rate")	
+		return errors.New("Error during un marshalling the FX rate")
 	}
 
 	if fxAmount >= currUpperBound || fxAmount <= currLowerBound {
 		contextLogger.Infof("FX threshold satisfied")
+		contextLogger.Infof("Current FX rate %v", fxAmount)
 		if fxAmount <= currLowerBound {
 			emailText = "LOW"
 		}
@@ -109,23 +110,15 @@ func Handler(ctx context.Context, request CustomEvent) error {
 			contextLogger.Infof("Creating an item in Dynamo with computed hash")
 			createItem(hashString, fxAmount)
 			sendEmail = true
+			dbAmount = fxAmount
 		}
 
 		if dbItem != nil {
 			contextLogger.Infof("Found item in DB by hash value")
-			amount = dbItem.CurrencyValue
-		} else {
-			contextLogger.Infof("Trying to retrieve value from DB after create")
-			record, err := getItem(hashString)
-			if err != nil {
-				contextLogger.Infof("Failed to get the rec from dynamo. This is unusual !!")
-				panic(fmt.Sprintf("Failed to get the rec from DB, %v", err))
-			}
-			amount = record.CurrencyValue
+			dbAmount = dbItem.CurrencyValue
 		}
 
-		if thresholdExceedsPercentVal(fxAmount, amount) {
-			contextLogger.Infof("FX Alert threshold diff is greater than 30%")
+		if thresholdExceedsPercentVal(fxAmount, dbAmount) {
 			sendEmail = true
 		}
 
@@ -146,6 +139,10 @@ func Handler(ctx context.Context, request CustomEvent) error {
 }
 
 func thresholdExceedsPercentVal(currentVal, existingVal float64) bool {
+	if currentVal == existingVal {
+		return false
+	}
+
 	fmt.Println("Inside threshold func to check if threshold is greater than set percentage i.e ", thresholdPercentage)
 	diff := math.Abs(float64(currentVal - existingVal))
 	delta := (diff / float64(existingVal)) * 100
@@ -297,7 +294,7 @@ func getExchangeRate(ctx context.Context) (*ExchangeResponse, error) {
 
 func buildCurrencyExchangeEndpoint() string {
 	return "http://ec2-13-234-37-255.ap-south-1.compute.amazonaws.com/v1/currency-exchange/from/" + fromCurrency + "/to/" + toCurrency
- }
+}
 
 func getLocalTime() string {
 	loc, err := time.LoadLocation("Australia/Melbourne")
