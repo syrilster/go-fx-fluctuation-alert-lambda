@@ -313,5 +313,5 @@ func getExpiryTime() int64 {
 		panic(fmt.Sprintf("Failed to load local time for India, %v", err))
 	}
 	t := time.Now().In(loc)
-	return t.Add(time.Duration(32400) * time.Second).Unix()
+	return t.Add(time.Duration(14) * time.Hour).Unix()
 }
