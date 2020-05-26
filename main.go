@@ -55,6 +55,8 @@ var tableName string = "fx_rate"
 var awsRegion string = "ap-south-1"
 var emailText string = "HIGH"
 
+const ec2Host string = "http://ec2-3-7-183-203.ap-south-1.compute.amazonaws.com/"
+
 func init() {
 	var err error
 	toEmail = os.Getenv("TO_EMAIL")
@@ -293,7 +295,7 @@ func getExchangeRate(ctx context.Context) (*ExchangeResponse, error) {
 }
 
 func buildCurrencyExchangeEndpoint() string {
-	return "http://ec2-13-234-37-255.ap-south-1.compute.amazonaws.com/v1/currency-exchange/from/" + fromCurrency + "/to/" + toCurrency
+	return ec2Host + "v1/currency-exchange/from/" + fromCurrency + "/to/" + toCurrency
 }
 
 func getLocalTime() string {
