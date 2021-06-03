@@ -7,7 +7,15 @@ import (
 )
 
 type Config struct {
-	ToEmail string `yaml:"toEmail"`
+	ToEmail          string  //from Env
+	FromEmail        string  `yaml:"fromEmail"`
+	AWSRegion        string  `yaml:"awsRegion"`
+	ExchangeEndpoint string  `yaml:"exchangeEndpoint"`
+	ThresholdPercent float64 `yaml:"thresholdPercent"`
+	FXTableName      string  `yaml:"fxTableName"`
+	LowerBound       float64 //From env
+	UpperBound       float64 //From env
+	AppID            string  //From env
 }
 
 func (c *Config) getConfig(path string) *Config {
