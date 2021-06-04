@@ -1,4 +1,4 @@
-package fxTrigger
+package fxtrigger
 
 import (
 	"context"
@@ -59,10 +59,13 @@ func Handler(ctx context.Context, request CustomEvent) error {
 
 	cfgPath := os.Getenv(configPathKey)
 
+	log.Print("Loading Config from path:", configPathKey)
 	var c Config
 	cfg := c.getConfig(cfgPath)
 
+	log.Print("Config Loaded Successfully")
 	cfg.ToEmail = os.Getenv("TO_EMAIL")
+	cfg.AppID = os.Getenv("APP_ID")
 	fromCurrency = os.Getenv("FROM_CURRENCY")
 	toCurrency = os.Getenv("TO_CURRENCY")
 
@@ -97,15 +100,17 @@ func process(ctx context.Context, cfg *Config, store *dynamo.DynamoStore, ses *s
 	var sendEmail bool
 	ctxLogger := log.Ctx(ctx)
 
+	log.Print("Calling exchange rate API")
 	fxAmount, err := eClient.GetExchangeRate(ctx, request)
 	if err != nil {
 		ctxLogger.Error().Err(err).Msg("Error when getting the exchange rate")
 		return errors.New("error when getting the exchange rate")
 	}
+	log.Printf("exchange rate API returned fx rate: %f", fxAmount)
 
 	if fxAmount >= float32(cfg.UpperBound) || fxAmount <= float32(cfg.LowerBound) {
-		ctxLogger.Info().Msg("FX threshold satisfied")
-		ctxLogger.Info().Msgf("Current FX rate %v", fxAmount)
+		log.Print("FX threshold satisfied")
+		log.Printf("Current FX rate %v", fxAmount)
 		if fxAmount <= float32(cfg.LowerBound) {
 			emailText = "LOW"
 		}
@@ -115,14 +120,14 @@ func process(ctx context.Context, cfg *Config, store *dynamo.DynamoStore, ses *s
 		dbItem, err := getItem(store, hashString)
 		if err != nil {
 			ctxLogger.Error().Err(err).Msg("key not found in DynamoDB")
-			ctxLogger.Info().Msgf("Creating an item in Dynamo with computed hash")
+			log.Print("Creating an item in Dynamo with computed hash")
 			createItem(store, hashString, fxAmount)
 			sendEmail = true
 			dbAmount = fxAmount
 		}
 
 		if dbItem != nil {
-			ctxLogger.Info().Msgf("Found item in DB by hash value")
+			log.Printf("Found item in DB by hash value: %s", hashString)
 			dbAmount = dbItem.CurrencyValue
 		}
 
@@ -131,12 +136,12 @@ func process(ctx context.Context, cfg *Config, store *dynamo.DynamoStore, ses *s
 		}
 
 	} else {
-		ctxLogger.Info().Msgf("FX Alert threshold not met")
-		ctxLogger.Info().Msgf("Current FX rate %v", fxAmount)
+		log.Print("FX Alert threshold not met")
+		log.Printf("Current FX rate %v", fxAmount)
 	}
 
 	if sendEmail {
-		ctxLogger.Info().Msgf("Attempting to send email notification")
+		log.Print("Attempting to send email notification")
 		err := sesSendEmail(ses, fxAmount, cfg.ToEmail)
 		if err != nil {
 			return errors.New("error when sending email")
@@ -151,10 +156,10 @@ func thresholdExceedsPercentVal(threshold float64, currentVal, existingVal float
 		return false
 	}
 
-	fmt.Println("Inside threshold func to check if threshold is greater than set percentage i.e ", threshold)
+	log.Printf("Inside threshold func to check if threshold is greater than set percentage: %f", threshold)
 	diff := math.Abs(float64(currentVal) - float64(existingVal))
 	delta := (diff / float64(existingVal)) * 100
-	fmt.Println("percent diff with prev value is: ", delta)
+	log.Printf("percent diff with prev value is: ", delta)
 	return delta > threshold
 }
 

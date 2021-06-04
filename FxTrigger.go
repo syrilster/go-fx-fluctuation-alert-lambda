@@ -6,5 +6,5 @@ import (
 )
 
 func main() {
-	lambda.Start(fxTrigger.Handler)
+	lambda.Start(fxtrigger.Handler)
 }

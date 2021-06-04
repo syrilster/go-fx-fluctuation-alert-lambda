@@ -52,7 +52,7 @@ func (c *client) GetExchangeRate(ctx context.Context, request Request) (float32,
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		ctxLogger.Info().Msgf("status returned from currency exchange service %s", resp.Status)
+		log.Printf("status returned from currency exchange service %s", resp.Status)
 		return defaultResp, fmt.Errorf("currency exchange service returned status: %s", resp.Status)
 	}
 

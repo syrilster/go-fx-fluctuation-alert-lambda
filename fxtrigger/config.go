@@ -1,4 +1,4 @@
-package fxTrigger
+package fxtrigger
 
 import (
 	"github.com/rs/zerolog/log"
