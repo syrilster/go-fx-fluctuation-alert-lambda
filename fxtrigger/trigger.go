@@ -159,7 +159,7 @@ func thresholdExceedsPercentVal(threshold float64, currentVal, existingVal float
 	log.Printf("Inside threshold func to check if threshold is greater than set percentage: %f", threshold)
 	diff := math.Abs(float64(currentVal) - float64(existingVal))
 	delta := (diff / float64(existingVal)) * 100
-	log.Printf("percent diff with prev value is: ", delta)
+	log.Printf("percent diff with prev value is: %f", delta)
 	return delta > threshold
 }
 
