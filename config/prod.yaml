@@ -1,0 +1,4 @@
+fromEmail: syrilster@gmail.com
+thresholdPercent: 80
+exchangeEndpoint: https://openexchangerates.org/api/latest.json
+fxTableName: fx_rate
