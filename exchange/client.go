@@ -16,7 +16,7 @@ type ClientInterface interface {
 	GetExchangeRate(ctx context.Context, request Request) (float32, error)
 }
 
-func NewClient(endpoint string, h chttp.CustomHttp, appID string) *client {
+func NewClient(endpoint string, h chttp.HTTPClient, appID string) *client {
 	return &client{
 		URL:         endpoint,
 		HttpCommand: h,
@@ -26,7 +26,7 @@ func NewClient(endpoint string, h chttp.CustomHttp, appID string) *client {
 
 type client struct {
 	URL         string
-	HttpCommand chttp.CustomHttp
+	HttpCommand chttp.HTTPClient
 	AppID       string
 }
 

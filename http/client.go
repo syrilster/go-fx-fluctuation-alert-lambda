@@ -2,7 +2,7 @@ package http
 
 import "net/http"
 
-type CustomHttp interface {
+type HTTPClient interface {
 	Do(req *http.Request) (resp *http.Response, err error)
 }
 

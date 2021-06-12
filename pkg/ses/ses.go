@@ -11,18 +11,27 @@ type SES interface {
 	SendEmail(input *ses.SendEmailInput) (*ses.SendEmailOutput, error)
 }
 
+type Client struct {
+	SES
+}
+
 type ClientAdapter struct {
 	*ses.SES
 }
 
-func New(awsRegion string) (*ClientAdapter, error) {
+func adaptClient(s *ses.SES) SES {
+	return &ClientAdapter{s}
+}
+
+func New(awsRegion string) (*Client, error) {
 	s, err := session.NewSession(aws.NewConfig().WithRegion(awsRegion))
 	if err != nil {
 		log.Error().Err(err).Msg("error getting a SES session")
 		return nil, err
 	}
-	c := ses.New(s)
-	return &ClientAdapter{c}, nil
+	nc := ses.New(s)
+	c := adaptClient(nc)
+	return &Client{c}, nil
 }
 
 func (c *ClientAdapter) SendEmail(input *ses.SendEmailInput) (*ses.SendEmailOutput, error) {
