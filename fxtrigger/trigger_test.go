@@ -31,7 +31,26 @@ func TestHandler(t *testing.T) {
 			require.NoError(t, err)
 		})
 	}
+}
 
+func TestProcess(t *testing.T) {
+	tests := []struct {
+		name       string
+		configPath string
+	}{
+		{name: "success",
+			configPath: testYAMLFile.Name()},
+	}
+
+	for _, test := range tests {
+		tt := test
+		t.Run(tt.name, func(t *testing.T) {
+			require.NoError(t, os.Setenv(configPathKey, tt.configPath))
+			err := process(context.Background(), CustomEvent{})
+
+			require.NoError(t, err)
+		})
+	}
 }
 
 func createTempFile(fileName string, content []byte) (f *os.File, err error) {

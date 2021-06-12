@@ -96,7 +96,7 @@ func Handler(ctx context.Context, request CustomEvent) error {
 	return process(ctx, cfg, dbClient, sesClient, exchangeClient, req)
 }
 
-func process(ctx context.Context, cfg *Config, store *dynamo.DynamoStore, ses *ses.ClientAdapter, eClient exchange.ClientInterface, request exchange.Request) error {
+func process(ctx context.Context, cfg *Config, store *dynamo.DynamoStore, ses *ses.Client, eClient exchange.ClientInterface, request exchange.Request) error {
 	var sendEmail bool
 	ctxLogger := log.Ctx(ctx)
 
@@ -190,7 +190,7 @@ func getItem(store *dynamo.DynamoStore, hash string) (*Item, error) {
 	return item, nil
 }
 
-func sesSendEmail(ses *ses.ClientAdapter, amount float32, toEmail string) error {
+func sesSendEmail(ses *ses.Client, amount float32, toEmail string) error {
 	emailParams := &pses.SendEmailInput{
 		Message: &pses.Message{
 			Subject: &pses.Content{
