@@ -121,7 +121,10 @@ func process(ctx context.Context, cfg *Config, store *dynamo.DynamoStore, ses *s
 		if err != nil {
 			ctxLogger.Error().Err(err).Msg("key not found in DynamoDB")
 			log.Print("Creating an item in Dynamo with computed hash")
-			createItem(store, hashString, fxAmount)
+			err := createItem(store, hashString, fxAmount)
+			if err != nil {
+				return err
+			}
 			sendEmail = true
 			dbAmount = fxAmount
 		}
@@ -163,7 +166,7 @@ func thresholdExceedsPercentVal(threshold float64, currentVal, existingVal float
 	return delta > threshold
 }
 
-func createItem(store *dynamo.DynamoStore, hash string, amount float32) {
+func createItem(store *dynamo.DynamoStore, hash string, amount float32) error {
 	expires := getExpiryTime()
 	rec := Item{
 		hash,
@@ -174,8 +177,10 @@ func createItem(store *dynamo.DynamoStore, hash string, amount float32) {
 	err := dynamo.Create(store.DB, store.TableName, rec)
 	if err != nil {
 		log.Error().Err(err).Msg("dynamo create item error")
-		panic(fmt.Sprintf("dynamo create item error %v", err))
+		return err
 	}
+
+	return nil
 }
 
 func getItem(store *dynamo.DynamoStore, hash string) (*Item, error) {
