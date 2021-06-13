@@ -57,19 +57,38 @@ func TestHandler(t *testing.T) {
 		name       string
 		configPath string
 	}{
-		{name: "success",
-			configPath: testYAMLFile.Name()},
+		{
+			name:       "success",
+			configPath: testYAMLFile.Name(),
+		},
 	}
 
 	for _, test := range tests {
 		tt := test
 		t.Run(tt.name, func(t *testing.T) {
-			//require.NoError(t, os.Setenv(configPathKey, tt.configPath))
-			//err := Handler(context.Background(), CustomEvent{})
-			//
-			//require.NoError(t, err)
+			require.NoError(t, os.Setenv(configPathKey, tt.configPath))
+			require.NoError(t, os.Setenv(lowerBound, "50"))
+			require.NoError(t, os.Setenv(upperBound, "55"))
+			err := Handler(context.Background(), CustomEvent{})
+
+			require.NotNil(t, err)
 		})
 	}
+}
+
+func TestHandlerFailure(t *testing.T) {
+	t.Run("failWhenNoLowerBoundInEnv", func(t *testing.T) {
+		require.NoError(t, os.Setenv(configPathKey, testYAMLFile.Name()))
+		err := Handler(context.Background(), CustomEvent{})
+		require.Error(t, err)
+	})
+
+	t.Run("failWhenNoUpperBoundInEnv", func(t *testing.T) {
+		require.NoError(t, os.Setenv(configPathKey, testYAMLFile.Name()))
+		require.NoError(t, os.Setenv(lowerBound, "50"))
+		err := Handler(context.Background(), CustomEvent{})
+		require.Error(t, err)
+	})
 }
 
 func TestProcess(t *testing.T) {

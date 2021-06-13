@@ -26,6 +26,8 @@ import (
 const (
 	awsRegion     = "ap-south-1"
 	configPathKey = "CONFIG_PATH"
+	lowerBound    = "LOWER_BOUND"
+	upperBound    = "UPPER_BOUND"
 )
 
 var emailText = "HIGH"
@@ -69,12 +71,12 @@ func Handler(ctx context.Context, request CustomEvent) error {
 	fromCurrency = os.Getenv("FROM_CURRENCY")
 	toCurrency = os.Getenv("TO_CURRENCY")
 
-	if cfg.LowerBound, err = strconv.ParseFloat(os.Getenv("LOWER_BOUND"), 32); err != nil {
-		panic(fmt.Sprint("error while loading env var LOWER_BOUND ", err))
+	if cfg.LowerBound, err = strconv.ParseFloat(os.Getenv(lowerBound), 32); err != nil {
+		return errors.New(fmt.Sprint("error while loading env var LOWER_BOUND ", err))
 	}
 
-	if cfg.UpperBound, err = strconv.ParseFloat(os.Getenv("UPPER_BOUND"), 32); err != nil {
-		panic(fmt.Sprint("error while loading env var UPPER_BOUND ", err))
+	if cfg.UpperBound, err = strconv.ParseFloat(os.Getenv(upperBound), 32); err != nil {
+		return errors.New(fmt.Sprint("error while loading env var UPPER_BOUND ", err))
 	}
 
 	dbSession := session.Must(session.NewSession(&aws.Config{
