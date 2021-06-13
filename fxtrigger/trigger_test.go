@@ -73,6 +73,24 @@ func TestHandler(t *testing.T) {
 }
 
 func TestProcess(t *testing.T) {
+	var dummyStore = &dynamo.DynamoStore{
+		TableName: dummyTable,
+		DB: &dynamo.MockDynamoDB{
+			GetItemFn: func(input *dynamodb.GetItemInput) (*dynamodb.GetItemOutput, error) {
+				return &dynamodb.GetItemOutput{
+					Item: map[string]*dynamodb.AttributeValue{
+						"hash": {
+							S: aws.String(dummyHash),
+						},
+						"currency_value": {
+							N: aws.String(dummyCurrVal),
+						},
+					},
+				}, nil
+			},
+		},
+	}
+
 	tests := []struct {
 		name      string
 		sesClient *pses.Client
@@ -82,47 +100,15 @@ func TestProcess(t *testing.T) {
 		expectErr bool
 	}{
 		{
-			name: "Success - When Hash entry already in DB",
-			store: &dynamo.DynamoStore{
-				TableName: dummyTable,
-				DB: &dynamo.MockDynamoDB{
-					GetItemFn: func(input *dynamodb.GetItemInput) (*dynamodb.GetItemOutput, error) {
-						return &dynamodb.GetItemOutput{
-							Item: map[string]*dynamodb.AttributeValue{
-								"hash": {
-									S: aws.String(dummyHash),
-								},
-								"currency_value": {
-									N: aws.String(dummyCurrVal),
-								},
-							},
-						}, nil
-					},
-				},
-			},
+			name:  "Success - When Hash entry already in DB",
+			store: dummyStore,
 			eClient: &mockExchange{GetExchangeRateFunc: func(ctx context.Context, request exchange.Request) (float32, error) {
 				return 59, nil
 			}},
 		},
 		{
-			name: "Success - When exchange rate meets lower bound",
-			store: &dynamo.DynamoStore{
-				TableName: dummyTable,
-				DB: &dynamo.MockDynamoDB{
-					GetItemFn: func(input *dynamodb.GetItemInput) (*dynamodb.GetItemOutput, error) {
-						return &dynamodb.GetItemOutput{
-							Item: map[string]*dynamodb.AttributeValue{
-								"hash": {
-									S: aws.String(dummyHash),
-								},
-								"currency_value": {
-									N: aws.String(dummyCurrVal),
-								},
-							},
-						}, nil
-					},
-				},
-			},
+			name:  "Success - When exchange rate meets lower bound",
+			store: dummyStore,
 			eClient: &mockExchange{GetExchangeRateFunc: func(ctx context.Context, request exchange.Request) (float32, error) {
 				return 50, nil
 			}},
@@ -131,24 +117,8 @@ func TestProcess(t *testing.T) {
 			}}},
 		},
 		{
-			name: "Success - When threshold not met",
-			store: &dynamo.DynamoStore{
-				TableName: dummyTable,
-				DB: &dynamo.MockDynamoDB{
-					GetItemFn: func(input *dynamodb.GetItemInput) (*dynamodb.GetItemOutput, error) {
-						return &dynamodb.GetItemOutput{
-							Item: map[string]*dynamodb.AttributeValue{
-								"hash": {
-									S: aws.String(dummyHash),
-								},
-								"currency_value": {
-									N: aws.String(dummyCurrVal),
-								},
-							},
-						}, nil
-					},
-				},
-			},
+			name:  "Success - When threshold not met",
+			store: dummyStore,
 			eClient: &mockExchange{GetExchangeRateFunc: func(ctx context.Context, request exchange.Request) (float32, error) {
 				return 56, nil
 			}},
