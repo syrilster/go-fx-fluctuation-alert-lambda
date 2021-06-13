@@ -18,7 +18,8 @@ jobs:
       - name: Build binary
         run: |
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o fx_alert && zip deployment.zip fx_alert config/prod.yaml
-      - name: default deploy
+      - name: AWS Lambda deploy
+        if: github.ref == 'refs/heads/master'
         uses: appleboy/lambda-action@master
         with:
           aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
