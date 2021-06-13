@@ -30,5 +30,5 @@ jobs:
           timeout: 5
           handler: fx_alert
           role: arn:aws:iam::215593062382:role/service-role/fx_alert-role-cqlocsln
-          runtime: Go 1.x
+          runtime: go1.x
           dry_run: true
