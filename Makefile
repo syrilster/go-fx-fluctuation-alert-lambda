@@ -1,6 +1,7 @@
 COVER_FILE?=./gen/coverage.out
 COVER_TEXT?=./gen/coverage.txt
 COVER_HTML?=./gen/coverage.html
+APP?=fx-fluctuation-alert-lambda
 export GO111MODULE=on
 export GOFLAGS=-mod=vendor
 
@@ -26,6 +27,12 @@ test:
 
 lint:
 	golangci-lint run -v
+
+clean:
+	rm -f ${APP}
+	
+build: clean
+	go build -o ${APP}
 
 PHONY: \
 	clean \
