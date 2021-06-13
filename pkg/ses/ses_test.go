@@ -15,6 +15,12 @@ func (m *mockSES) SendEmail(input *ses.SendEmailInput) (*ses.SendEmailOutput, er
 	return m.sendEmailFunc(input)
 }
 
+func TestNew(t *testing.T) {
+	c, err := New("")
+	require.NoError(t, err)
+	require.NotNil(t, c)
+}
+
 func TestSendEmail(t *testing.T) {
 	var dummyMsgID = new(string)
 	*dummyMsgID = "1234"

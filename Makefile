@@ -15,8 +15,8 @@ sonar:
 	   -coverprofile=$(COVER_FILE)
 
 test:
-	@mkdir -p gen
-	set -eo pipefail; go test -short `go list ./... | grep -vE "./test"` \
+	mkdir -p gen
+	go test -short `go list ./... | grep -vE "./test"` \
 	        -race -covermode=atomic -json \
 	        -coverprofile=$(COVER_FILE) \
 	        | tee $(TEST_JSON)
