@@ -57,22 +57,78 @@ func TestHandler(t *testing.T) {
 		name       string
 		configPath string
 	}{
-		{name: "success",
-			configPath: testYAMLFile.Name()},
+		{
+			name:       "success",
+			configPath: testYAMLFile.Name(),
+		},
 	}
 
 	for _, test := range tests {
 		tt := test
 		t.Run(tt.name, func(t *testing.T) {
-			//require.NoError(t, os.Setenv(configPathKey, tt.configPath))
-			//err := Handler(context.Background(), CustomEvent{})
-			//
-			//require.NoError(t, err)
+			require.NoError(t, os.Setenv(configPathKey, tt.configPath))
+			require.NoError(t, os.Setenv(lowerBound, "50"))
+			require.NoError(t, os.Setenv(upperBound, "55"))
+			err := Handler(context.Background(), CustomEvent{})
+
+			require.NotNil(t, err)
 		})
 	}
 }
 
+func TestHandlerFailure(t *testing.T) {
+	t.Run("failWhenNoLowerBoundInEnv", func(t *testing.T) {
+		require.NoError(t, os.Setenv(configPathKey, testYAMLFile.Name()))
+		err := Handler(context.Background(), CustomEvent{})
+		require.Error(t, err)
+	})
+
+	t.Run("failWhenNoUpperBoundInEnv", func(t *testing.T) {
+		require.NoError(t, os.Setenv(configPathKey, testYAMLFile.Name()))
+		require.NoError(t, os.Setenv(lowerBound, "50"))
+		err := Handler(context.Background(), CustomEvent{})
+		require.Error(t, err)
+	})
+}
+
 func TestProcess(t *testing.T) {
+	var dummyStore = &dynamo.DynamoStore{
+		TableName: dummyTable,
+		DB: &dynamo.MockDynamoDB{
+			GetItemFn: func(input *dynamodb.GetItemInput) (*dynamodb.GetItemOutput, error) {
+				return &dynamodb.GetItemOutput{
+					Item: map[string]*dynamodb.AttributeValue{
+						"hash": {
+							S: aws.String(dummyHash),
+						},
+						"currency_value": {
+							N: aws.String(dummyCurrVal),
+						},
+					},
+				}, nil
+			},
+		},
+	}
+
+	var dummyFailStore = &dynamo.DynamoStore{
+		TableName: dummyTable,
+		DB: &dynamo.MockDynamoDB{
+			GetItemFn: func(input *dynamodb.GetItemInput) (*dynamodb.GetItemOutput, error) {
+				return nil, errors.New("dynamo unknown error")
+			},
+			PutItemFn: func(input *dynamodb.PutItemInput) (output *dynamodb.PutItemOutput, e error) {
+				if *input.TableName != dummyTable {
+					assert.Fail(t, "table name mismatch")
+				}
+
+				if *input.Item["hash"].S == "" {
+					assert.Fail(t, "key name mismatch")
+				}
+				return nil, errors.New("dynamo unknown error")
+			},
+		},
+	}
+
 	tests := []struct {
 		name      string
 		sesClient *pses.Client
@@ -82,47 +138,15 @@ func TestProcess(t *testing.T) {
 		expectErr bool
 	}{
 		{
-			name: "Success - When Hash entry already in DB",
-			store: &dynamo.DynamoStore{
-				TableName: dummyTable,
-				DB: &dynamo.MockDynamoDB{
-					GetItemFn: func(input *dynamodb.GetItemInput) (*dynamodb.GetItemOutput, error) {
-						return &dynamodb.GetItemOutput{
-							Item: map[string]*dynamodb.AttributeValue{
-								"hash": {
-									S: aws.String(dummyHash),
-								},
-								"currency_value": {
-									N: aws.String(dummyCurrVal),
-								},
-							},
-						}, nil
-					},
-				},
-			},
+			name:  "Success - When Hash entry already in DB",
+			store: dummyStore,
 			eClient: &mockExchange{GetExchangeRateFunc: func(ctx context.Context, request exchange.Request) (float32, error) {
 				return 59, nil
 			}},
 		},
 		{
-			name: "Success - When exchange rate meets lower bound",
-			store: &dynamo.DynamoStore{
-				TableName: dummyTable,
-				DB: &dynamo.MockDynamoDB{
-					GetItemFn: func(input *dynamodb.GetItemInput) (*dynamodb.GetItemOutput, error) {
-						return &dynamodb.GetItemOutput{
-							Item: map[string]*dynamodb.AttributeValue{
-								"hash": {
-									S: aws.String(dummyHash),
-								},
-								"currency_value": {
-									N: aws.String(dummyCurrVal),
-								},
-							},
-						}, nil
-					},
-				},
-			},
+			name:  "Success - When exchange rate meets lower bound",
+			store: dummyStore,
 			eClient: &mockExchange{GetExchangeRateFunc: func(ctx context.Context, request exchange.Request) (float32, error) {
 				return 50, nil
 			}},
@@ -131,24 +155,8 @@ func TestProcess(t *testing.T) {
 			}}},
 		},
 		{
-			name: "Success - When threshold not met",
-			store: &dynamo.DynamoStore{
-				TableName: dummyTable,
-				DB: &dynamo.MockDynamoDB{
-					GetItemFn: func(input *dynamodb.GetItemInput) (*dynamodb.GetItemOutput, error) {
-						return &dynamodb.GetItemOutput{
-							Item: map[string]*dynamodb.AttributeValue{
-								"hash": {
-									S: aws.String(dummyHash),
-								},
-								"currency_value": {
-									N: aws.String(dummyCurrVal),
-								},
-							},
-						}, nil
-					},
-				},
-			},
+			name:  "Success - When threshold not met",
+			store: dummyStore,
 			eClient: &mockExchange{GetExchangeRateFunc: func(ctx context.Context, request exchange.Request) (float32, error) {
 				return 56, nil
 			}},
@@ -192,24 +200,7 @@ func TestProcess(t *testing.T) {
 			sesClient: &pses.Client{SES: &mockSES{sendEmailFunc: func(input *ses.SendEmailInput) (*ses.SendEmailOutput, error) {
 				return &ses.SendEmailOutput{}, nil
 			}}},
-			store: &dynamo.DynamoStore{
-				TableName: dummyTable,
-				DB: &dynamo.MockDynamoDB{
-					GetItemFn: func(input *dynamodb.GetItemInput) (*dynamodb.GetItemOutput, error) {
-						return nil, errors.New("dynamo unknown error")
-					},
-					PutItemFn: func(input *dynamodb.PutItemInput) (output *dynamodb.PutItemOutput, e error) {
-						if *input.TableName != dummyTable {
-							assert.Fail(t, "table name mismatch")
-						}
-
-						if *input.Item["hash"].S == "" {
-							assert.Fail(t, "key name mismatch")
-						}
-						return nil, errors.New("dynamo unknown error")
-					},
-				},
-			},
+			store: dummyFailStore,
 			eClient: &mockExchange{GetExchangeRateFunc: func(ctx context.Context, request exchange.Request) (float32, error) {
 				return 59, nil
 			}},
@@ -220,24 +211,7 @@ func TestProcess(t *testing.T) {
 			sesClient: &pses.Client{SES: &mockSES{sendEmailFunc: func(input *ses.SendEmailInput) (*ses.SendEmailOutput, error) {
 				return nil, errors.New("something went wrong")
 			}}},
-			store: &dynamo.DynamoStore{
-				TableName: dummyTable,
-				DB: &dynamo.MockDynamoDB{
-					GetItemFn: func(input *dynamodb.GetItemInput) (*dynamodb.GetItemOutput, error) {
-						return nil, errors.New("dynamo unknown error")
-					},
-					PutItemFn: func(input *dynamodb.PutItemInput) (output *dynamodb.PutItemOutput, e error) {
-						if *input.TableName != dummyTable {
-							assert.Fail(t, "table name mismatch")
-						}
-
-						if *input.Item["hash"].S == "" {
-							assert.Fail(t, "key name mismatch")
-						}
-						return &dynamodb.PutItemOutput{}, nil
-					},
-				},
-			},
+			store: dummyFailStore,
 			eClient: &mockExchange{GetExchangeRateFunc: func(ctx context.Context, request exchange.Request) (float32, error) {
 				return 59, nil
 			}},
