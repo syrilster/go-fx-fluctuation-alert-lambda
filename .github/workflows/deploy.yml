@@ -17,7 +17,7 @@ jobs:
           go-version: ${{ matrix.go-version }}
       - name: Build binary
         run: |
-          cd fx && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o fx_alert && zip main.zip fx_alert config/prod.yaml
+          cd go-fx-fluctuation-alert-lambda && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o fx_alert && zip main.zip fx_alert config/prod.yaml
       - name: default deploy
         uses: appleboy/lambda-action@master
         with:
@@ -25,7 +25,7 @@ jobs:
           aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws_region: ${{ secrets.AWS_REGION }}
           function_name: fx_alert
-          zip_file: fx/deployment.zip
+          zip_file: go-fx-fluctuation-alert-lambda/deployment.zip
           memory_size: 512
           timeout: 5
           handler: fx_alert
