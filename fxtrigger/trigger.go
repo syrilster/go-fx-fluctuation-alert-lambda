@@ -99,7 +99,6 @@ func Handler(ctx context.Context, request CustomEvent) error {
 }
 
 func process(ctx context.Context, cfg *Config, store *dynamo.DynamoStore, ses *ses.Client, eClient exchange.ClientInterface, request exchange.Request) error {
-	var sendEmail bool
 	ctxLogger := log.Ctx(ctx)
 
 	log.Print("Calling exchange rate API")
@@ -110,10 +109,31 @@ func process(ctx context.Context, cfg *Config, store *dynamo.DynamoStore, ses *s
 	}
 	log.Printf("exchange rate API returned fx rate: %f", fxAmount)
 
-	if fxAmount >= float32(cfg.UpperBound) || fxAmount <= float32(cfg.LowerBound) {
+	sendEmail, err := checkThresholdSatisfied(ctx, store, fxAmount, float32(cfg.LowerBound), float32(cfg.UpperBound), cfg.ThresholdPercent)
+	if err != nil {
+		return errors.New("internal: error checking threshold criteria")
+	}
+
+	if sendEmail {
+		log.Print("Attempting to send email notification")
+		err := sesSendEmail(ses, fxAmount, cfg.ToEmail)
+		if err != nil {
+			return errors.New("error when sending email")
+		}
+	} else {
+		log.Print("FX Alert threshold not met")
+		log.Printf("Current FX rate %v", fxAmount)
+	}
+
+	return nil
+}
+
+func checkThresholdSatisfied(ctx context.Context, store *dynamo.DynamoStore, fxAmount, lowerBound, upperBound float32, thresholdPercent float64) (sendEmail bool, err error) {
+	ctxLogger := log.Ctx(ctx)
+	if fxAmount >= upperBound || fxAmount <= lowerBound {
 		log.Print("FX threshold satisfied")
 		log.Printf("Current FX rate %v", fxAmount)
-		if fxAmount <= float32(cfg.LowerBound) {
+		if fxAmount <= lowerBound {
 			emailText = "LOW"
 		}
 
@@ -125,7 +145,7 @@ func process(ctx context.Context, cfg *Config, store *dynamo.DynamoStore, ses *s
 			log.Print("Creating an item in Dynamo with computed hash")
 			err := createItem(store, hashString, fxAmount)
 			if err != nil {
-				return err
+				return false, err
 			}
 			sendEmail = true
 			dbAmount = fxAmount
@@ -136,24 +156,11 @@ func process(ctx context.Context, cfg *Config, store *dynamo.DynamoStore, ses *s
 			dbAmount = dbItem.CurrencyValue
 		}
 
-		if thresholdExceedsPercentVal(cfg.ThresholdPercent, fxAmount, dbAmount) {
+		if thresholdExceedsPercentVal(thresholdPercent, fxAmount, dbAmount) {
 			sendEmail = true
 		}
-
-	} else {
-		log.Print("FX Alert threshold not met")
-		log.Printf("Current FX rate %v", fxAmount)
 	}
-
-	if sendEmail {
-		log.Print("Attempting to send email notification")
-		err := sesSendEmail(ses, fxAmount, cfg.ToEmail)
-		if err != nil {
-			return errors.New("error when sending email")
-		}
-	}
-
-	return nil
+	return sendEmail, nil
 }
 
 func thresholdExceedsPercentVal(threshold float64, currentVal, existingVal float32) bool {

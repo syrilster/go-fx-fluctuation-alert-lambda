@@ -1,3 +1,5 @@
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=syrilster_go-fx-fluctuation-alert-lambda&metric=alert_status)](https://sonarcloud.io/dashboard?id=syrilster_go-fx-fluctuation-alert-lambda)
+
 # fx-fluctuation-alert-lambda
 * A lambda function to get the currency exchange rate from the API provided by openexchangerates.org and sends an email if the FX price changes as per a preset threshold. (Can be changed form the lamnbda env vars)
 * This is run as a cloud watch scheduled event running every hour from 7AM to 06PM.
