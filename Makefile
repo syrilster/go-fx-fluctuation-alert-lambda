@@ -8,6 +8,12 @@ update-vendor:
 	go mod tidy
 	go mod vendor
 
+sonar:
+	mkdir -p gen
+	go test `go list ./... | grep -vE "./test"` \
+	   -race -covermode=atomic -json \
+	   -coverprofile=$(COVER_FILE)
+
 test:
 	@mkdir -p gen
 	set -eo pipefail; go test -short `go list ./... | grep -vE "./test"` \

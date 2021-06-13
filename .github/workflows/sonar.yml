@@ -19,7 +19,7 @@ jobs:
             -Dsonar.test.exclusions=vendor/**
             -Dsonar.verbose=true
       - name: Unit Test
-        run: make test
+        run: make sonar
       - name: SonarCloud Scan
         uses: sonarsource/sonarcloud-github-action@master
         env:
