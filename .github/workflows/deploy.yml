@@ -1,6 +1,7 @@
 on:
   workflow_run:
     workflows: ["Sonar", "Build and test Go"]
+    branches: ["master"]
     types:
       - completed
 name: deploy to lambda
@@ -8,6 +9,7 @@ jobs:
   deploy_zip:
     name: deploy lambda function
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     strategy:
       matrix:
         go-version: [1.13.x]
