@@ -1,5 +1,5 @@
 name: Build and test Go
-on: [push, pull_request]
+on: [pull_request]
 jobs:
   build:
     name: Build
@@ -18,12 +18,6 @@ jobs:
           GOPROXY: "https://proxy.golang.org"
         run: make build
 
-      - name: Static Check
-        run: |
-          # add executables installed with go get to PATH
-          export PATH=${PATH}:`go env GOPATH`/bin
-          go get -u honnef.co/go/tools/cmd/staticcheck
-          staticcheck ./...
       - name: Unit Tests
         env:
           GOPROXY: "https://proxy.golang.org"
