@@ -31,6 +31,5 @@ func (c *Config) getConfig(path string) *Config {
 		log.Error().Err(err).Msg("Unable to marshall successfully")
 		return nil
 	}
-
 	return c
 }
