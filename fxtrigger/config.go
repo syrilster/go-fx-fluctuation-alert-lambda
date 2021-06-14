@@ -4,6 +4,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
 	"io/ioutil"
+	"path/filepath"
 )
 
 type Config struct {
@@ -19,7 +20,7 @@ type Config struct {
 }
 
 func (c *Config) getConfig(path string) *Config {
-	bytes, err := ioutil.ReadFile(path)
+	bytes, err := ioutil.ReadFile(filepath.Clean(path))
 	if err != nil {
 		log.Error().Err(err).Msg("Invalid Config Path")
 		return nil
@@ -30,6 +31,5 @@ func (c *Config) getConfig(path string) *Config {
 		log.Error().Err(err).Msg("Unable to marshall successfully")
 		return nil
 	}
-
 	return c
 }

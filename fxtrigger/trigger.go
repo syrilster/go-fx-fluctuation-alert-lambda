@@ -27,7 +27,7 @@ const (
 	awsRegion     = "ap-south-1"
 	configPathKey = "CONFIG_PATH"
 	lowerBound    = "LOWER_BOUND"
-	upperBound    = "UPPER_BOUND"
+	//upperBound    = "UPPER_BOUND"
 )
 
 var emailText = "HIGH"
