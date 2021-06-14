@@ -7,6 +7,7 @@
 * Subsequent emails will be sent only if the FX rate changes to a certain percent within a day. (Example increase of 50 cents)
 
 # Uploading lambda to AWS
+* GHA runs on master is available to deploy zip to AWS lambda automatically.
 * Execute these commands in root folder:
   ```
   GOOS=linux GOARCH=amd64 go build -o fx_alert
