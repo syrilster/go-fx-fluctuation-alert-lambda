@@ -1,7 +1,10 @@
+on:
+  workflow_run:
+    workflows: ["Sonar", "Build and test Go"]
+    types:
+      - completed
 name: deploy to lambda
-on: [push]
 jobs:
-
   deploy_zip:
     name: deploy lambda function
     runs-on: ubuntu-latest
