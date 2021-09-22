@@ -1,5 +1,7 @@
 name: reviewdog
-on: [pull_request]
+on:
+  push:
+    
 jobs:
   # Enable cache of golangci-lint result, go build and go dependencies
   with_cache:
