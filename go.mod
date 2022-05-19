@@ -3,7 +3,7 @@ module github.com/syrilster/go-fx-fluctuation-alert-lambda
 go 1.13
 
 require (
-	github.com/aws/aws-lambda-go v1.31.1
+	github.com/aws/aws-lambda-go v1.32.0
 	github.com/aws/aws-sdk-go v1.44.17
 	github.com/rs/zerolog v1.26.1
 	github.com/stretchr/testify v1.7.1
