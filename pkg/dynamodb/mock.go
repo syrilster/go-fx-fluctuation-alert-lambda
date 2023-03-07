@@ -1,12 +1,11 @@
 package dynamodb
 
 import (
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
 )
 
-var dummyTable = "dummyTable"
+var dummyTable = "fx_rate"
 
 const (
 	dummyHash    = "hash-string"
@@ -44,32 +43,12 @@ func (db *MockDynamoDB) DeleteItem(item *dynamodb.DeleteItemInput) (*dynamodb.De
 
 // GetItem operation returns a set of attributes for the item with the given primary key.
 func (db *MockDynamoDB) GetItem(item *dynamodb.GetItemInput) (*dynamodb.GetItemOutput, error) {
-	if *item.TableName != dummyTable {
-		panic("table name mismatch")
-	}
-
-	return &dynamodb.GetItemOutput{
-		Item: map[string]*dynamodb.AttributeValue{
-			"hash": {
-				S: aws.String(dummyHash),
-			},
-			"currency_value": {
-				N: aws.String(dummyCurrVal),
-			},
-		},
-	}, nil
+	return db.GetItemFn(item)
 }
 
 // PutItem creates a new item, or replaces an old item with a new item.
 func (db *MockDynamoDB) PutItem(item *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
-	if *item.TableName != dummyTable {
-		panic("table name mismatch")
-	}
-
-	if *item.Item["hash"].S == "" {
-		panic("key name mismatch")
-	}
-	return &dynamodb.PutItemOutput{}, nil
+	return db.PutItemFn(item)
 }
 
 // Query finds items based on primary key values.
