@@ -48,9 +48,20 @@ type Item struct {
 	Expires       int64   `json:"expires_at"`
 }
 
+type DBService struct {
+	store dynamo.DBStore
+}
+
 var fromCurrency string
 var toCurrency string
 var dbAmount float32
+
+// NewDBService is accepting interface here
+func NewDBService(s dynamo.DBStore) *DBService {
+	return &DBService{
+		store: s,
+	}
+}
 
 //Handler func for lambda
 func Handler(ctx context.Context, request CustomEvent) error {
@@ -82,7 +93,7 @@ func Handler(ctx context.Context, request CustomEvent) error {
 	dbSession := session.Must(session.NewSession(&aws.Config{
 		Region: aws.String(cfg.AWSRegion),
 	}))
-	dbClient := dynamo.New(cfg.FXTableName, dynamodb.New(dbSession))
+	dbClient := dynamo.NewStore(cfg.FXTableName, dynamodb.New(dbSession))
 
 	sesClient, err := ses.New(awsRegion)
 	if err != nil {
@@ -139,11 +150,12 @@ func checkThresholdSatisfied(ctx context.Context, store *dynamo.DynamoStore, fxA
 
 		hashString := fmt.Sprint(hash())
 		ctxLogger.Info().Msgf("computed hash is %v", hashString)
-		dbItem, err := getItem(store, hashString)
+		dbService := NewDBService(store)
+		dbItem, err := dbService.getItem(hashString)
 		if err != nil {
 			ctxLogger.Error().Err(err).Msg("key not found in DynamoDB")
 			log.Print("Creating an item in Dynamo with computed hash")
-			err := createItem(store, hashString, fxAmount)
+			err := dbService.createItem(hashString, fxAmount)
 			if err != nil {
 				return false, err
 			}
@@ -175,7 +187,7 @@ func thresholdExceedsPercentVal(threshold float64, currentVal, existingVal float
 	return delta > threshold
 }
 
-func createItem(store *dynamo.DynamoStore, hash string, amount float32) error {
+func (d *DBService) createItem(hash string, amount float32) error {
 	expires := getExpiryTime()
 	rec := Item{
 		hash,
@@ -183,7 +195,7 @@ func createItem(store *dynamo.DynamoStore, hash string, amount float32) error {
 		expires,
 	}
 
-	err := dynamo.Create(store.DB, store.TableName, rec)
+	err := d.store.CreateItem(rec)
 	if err != nil {
 		log.Error().Err(err).Msg("dynamo create item error")
 		return err
@@ -192,10 +204,10 @@ func createItem(store *dynamo.DynamoStore, hash string, amount float32) error {
 	return nil
 }
 
-func getItem(store *dynamo.DynamoStore, hash string) (*Item, error) {
+func (d *DBService) getItem(hash string) (*Item, error) {
 	item := &Item{}
 
-	err := dynamo.GetItem(store.DB, store.TableName, hash, item)
+	err := d.store.GetItem(hash, item)
 	if err != nil {
 		log.Error().Err(err).Msg("dynamo getItem error")
 		return nil, err

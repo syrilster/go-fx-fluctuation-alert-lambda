@@ -5,6 +5,13 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
 )
 
+var dummyTable = "fx_rate"
+
+const (
+	dummyHash    = "hash-string"
+	dummyCurrVal = "59"
+)
+
 // MockDynamoDB implements the aws dynamodb interface and allows for specifying mocking behavior
 type MockDynamoDB struct {
 	BatchGetItemFn   func(*dynamodb.BatchGetItemInput) (*dynamodb.BatchGetItemOutput, error)

@@ -15,21 +15,26 @@ type DynamoStore struct {
 	DB        dynamodbiface.DynamoDBAPI
 }
 
-func New(t string, db *dynamodb.DynamoDB) *DynamoStore {
+type DBStore interface {
+	CreateItem(item interface{}) error
+	GetItem(hash string, item interface{}) error
+}
+
+func NewStore(t string, db *dynamodb.DynamoDB) *DynamoStore {
 	return &DynamoStore{
 		TableName: t,
 		DB:        db,
 	}
 }
 
-// Create write new entry into the DB table
-func Create(db dynamodbiface.DynamoDBAPI, table string, item interface{}) error {
+// CreateItem write new entry into the DB table
+func (d *DynamoStore) CreateItem(item interface{}) error {
 	av, err := dynamodbattribute.Marshal(item)
 	if err != nil || av == nil {
-		log.Error().Err(err).Msg("error in Create to db")
+		log.Error().Err(err).Msg("error in CreateItem to db")
 		return err
 	}
-	return create(db, table, av)
+	return create(d.DB, d.TableName, av)
 }
 
 func create(db dynamodbiface.DynamoDBAPI, table string, av *dynamodb.AttributeValue) error {
@@ -38,16 +43,16 @@ func create(db dynamodbiface.DynamoDBAPI, table string, av *dynamodb.AttributeVa
 }
 
 // GetItem gets items from a DynamoDB table based on a provided hash
-func GetItem(db dynamodbiface.DynamoDBAPI, table string, hash string, item interface{}) error {
+func (d *DynamoStore) GetItem(hash string, item interface{}) error {
 	input := &dynamodb.GetItemInput{
-		TableName: aws.String(table),
+		TableName: aws.String(d.TableName),
 		Key: map[string]*dynamodb.AttributeValue{
 			"hash": {
 				S: aws.String(hash),
 			},
 		},
 	}
-	output, err := db.GetItem(input)
+	output, err := d.DB.GetItem(input)
 	if err != nil {
 		return err
 	}
