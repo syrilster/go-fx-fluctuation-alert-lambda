@@ -24,7 +24,7 @@ jobs:
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o fx_alert && zip deployment.zip fx_alert config/prod.yaml
       - name: AWS Lambda deploy
         if: github.ref == 'refs/heads/master'
-        uses: appleboy/lambda-action@master
+        uses: appleboy/lambda-action@v0.1.9
         with:
           aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -34,6 +34,6 @@ jobs:
           memory_size: 512
           timeout: 5
           handler: fx_alert
-          role: arn:aws:iam::215593062382:role/service-role/fx_alert-role-cqlocsln
+          role: arn:aws:iam::215593062382:role/service-role/fx_alert-role-f0fh0zh4
           runtime: provided.al2
           dry_run: true
