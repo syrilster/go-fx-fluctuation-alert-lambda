@@ -16,21 +16,21 @@ type ClientInterface interface {
 	GetExchangeRate(ctx context.Context, request Request) (float32, error)
 }
 
-func NewClient(endpoint string, h chttp.HTTPClient, appID string) *client {
-	return &client{
+func NewClient(endpoint string, h chttp.Client, appID string) *Client {
+	return &Client{
 		URL:         endpoint,
 		HttpCommand: h,
 		AppID:       appID,
 	}
 }
 
-type client struct {
+type Client struct {
 	URL         string
-	HttpCommand chttp.HTTPClient
+	HttpCommand chttp.Client
 	AppID       string
 }
 
-func (c *client) GetExchangeRate(ctx context.Context, request Request) (float32, error) {
+func (c *Client) GetExchangeRate(ctx context.Context, request Request) (float32, error) {
 	ctxLogger := log.Ctx(ctx)
 
 	defaultResp := float32(0)
@@ -106,6 +106,6 @@ func getRateForCurrency(rates map[string]interface{}, currency string) float32 {
 	return float32(exchangeRate)
 }
 
-func (c *client) buildCurrencyExchangeEndpoint() (endpoint string) {
+func (c *Client) buildCurrencyExchangeEndpoint() (endpoint string) {
 	return c.URL + "?app_id=" + c.AppID
 }

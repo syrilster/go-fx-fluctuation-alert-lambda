@@ -2,18 +2,18 @@ package http
 
 import "net/http"
 
-type HTTPClient interface {
+type Client interface {
 	Do(req *http.Request) (resp *http.Response, err error)
 }
 
-type Client struct {
+type HTTP struct {
 	client *http.Client
 }
 
-func New() *Client {
-	return &Client{client: http.DefaultClient}
+func New() *HTTP {
+	return &HTTP{client: http.DefaultClient}
 }
 
-func (c Client) Do(req *http.Request) (resp *http.Response, err error) {
+func (c HTTP) Do(req *http.Request) (resp *http.Response, err error) {
 	return c.client.Do(req)
 }
