@@ -1,6 +1,6 @@
 on:
   workflow_run:
-    workflows: ["Sonar", "Build and test Go"]
+    workflows: ["Build and test Go"]
     types:
       - completed
 name: deploy to lambda
