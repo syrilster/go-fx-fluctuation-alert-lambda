@@ -33,7 +33,7 @@ jobs:
           zip_file: deployment.zip
           memory_size: 512
           timeout: 5
-          handler: bootstrap
+          handler: fx_alert
           role: arn:aws:iam::215593062382:role/service-role/fx_alert-role-f0fh0zh4
           runtime: provided.al2023
           dry_run: true
