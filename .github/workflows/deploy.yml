@@ -1,6 +1,6 @@
 on:
   workflow_run:
-    workflows: ["Sonar", "Build and test Go"]
+    workflows: ["Build and test Go"]
     types:
       - completed
 name: deploy to lambda
@@ -11,10 +11,10 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     strategy:
       matrix:
-        go-version: [1.18.x]
+        go-version: [1.22]
     steps:
       - name: checkout source code
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
       - name: Install Go
         uses: actions/setup-go@v1
         with:
@@ -35,5 +35,5 @@ jobs:
           timeout: 5
           handler: fx_alert
           role: arn:aws:iam::215593062382:role/service-role/fx_alert-role-cqlocsln
-          runtime: go1.x
+          runtime: provided.al2
           dry_run: true
