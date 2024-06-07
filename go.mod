@@ -4,7 +4,7 @@ go 1.22
 
 require (
 	github.com/aws/aws-lambda-go v1.47.0
-	github.com/aws/aws-sdk-go v1.53.17
+	github.com/aws/aws-sdk-go v1.53.18
 	github.com/rs/zerolog v1.33.0
 	github.com/stretchr/testify v1.9.0
 	gopkg.in/yaml.v3 v3.0.1
