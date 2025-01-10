@@ -5,11 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type mockClient struct {
@@ -41,7 +42,7 @@ func TestGetExchangeRate(t *testing.T) {
 			return &http.Response{
 				Status:     "StatusInternalServerError",
 				StatusCode: http.StatusInternalServerError,
-				Body:       ioutil.NopCloser(bytes.NewReader(nil)),
+				Body:       io.NopCloser(bytes.NewReader(nil)),
 			}, nil
 		}
 
@@ -56,7 +57,7 @@ func TestGetExchangeRate(t *testing.T) {
 		m.doFn = func(request *http.Request) (response *http.Response, e error) {
 			return &http.Response{
 				StatusCode: http.StatusNoContent,
-				Body:       ioutil.NopCloser(bytes.NewReader(nil)),
+				Body:       io.NopCloser(bytes.NewReader(nil)),
 			}, nil
 		}
 
@@ -83,7 +84,7 @@ func TestGetExchangeRate(t *testing.T) {
 		m.doFn = func(request *http.Request) (response *http.Response, e error) {
 			return &http.Response{
 				StatusCode: http.StatusOK,
-				Body:       ioutil.NopCloser(bytes.NewReader(rJson)),
+				Body:       io.NopCloser(bytes.NewReader(rJson)),
 			}, nil
 		}
 
@@ -111,7 +112,7 @@ func TestGetExchangeRate(t *testing.T) {
 		m.doFn = func(request *http.Request) (response *http.Response, e error) {
 			return &http.Response{
 				StatusCode: http.StatusOK,
-				Body:       ioutil.NopCloser(bytes.NewReader(rJson)),
+				Body:       io.NopCloser(bytes.NewReader(rJson)),
 			}, nil
 		}
 
@@ -139,7 +140,7 @@ func TestGetExchangeRate(t *testing.T) {
 		m.doFn = func(request *http.Request) (response *http.Response, e error) {
 			return &http.Response{
 				StatusCode: http.StatusOK,
-				Body:       ioutil.NopCloser(bytes.NewReader(rJson)),
+				Body:       io.NopCloser(bytes.NewReader(rJson)),
 			}, nil
 		}
 

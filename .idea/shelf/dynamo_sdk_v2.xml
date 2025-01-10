@@ -1,0 +1,18 @@
+<changelist name="dynamo_sdk_v2" date="1736475346332" recycled="false">
+  <option name="PATH" value="$PROJECT_DIR$/.idea/shelf/dynamo_sdk_v2/shelved.patch" />
+  <option name="DESCRIPTION" value="dynamo sdk v2" />
+  <binary>
+    <option name="BEFORE_PATH" value="vendor/github.com/aws/aws-sdk-go/aws/credentials/example.ini" />
+  </binary>
+  <binary>
+    <option name="BEFORE_PATH" value="vendor/github.com/aws/aws-sdk-go/internal/sync/singleflight/LICENSE" />
+  </binary>
+  <binary>
+    <option name="AFTER_PATH" value="bootstrap" />
+    <option name="SHELVED_PATH" value="$PROJECT_DIR$/.idea/shelf/dynamo_sdk_v2/bootstrap" />
+  </binary>
+  <binary>
+    <option name="AFTER_PATH" value="deployment.zip" />
+    <option name="SHELVED_PATH" value="$PROJECT_DIR$/.idea/shelf/dynamo_sdk_v2/deployment.zip" />
+  </binary>
+</changelist>

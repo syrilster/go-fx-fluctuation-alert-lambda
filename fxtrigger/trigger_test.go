@@ -3,17 +3,20 @@ package fxtrigger
 import (
 	"context"
 	"errors"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/ses"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"github.com/syrilster/go-fx-fluctuation-alert-lambda/exchange"
-	dynamo "github.com/syrilster/go-fx-fluctuation-alert-lambda/pkg/dynamodb"
-	pses "github.com/syrilster/go-fx-fluctuation-alert-lambda/pkg/ses"
-	"io/ioutil"
 	"os"
 	"testing"
+
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/aws/aws-sdk-go-v2/service/sesv2"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+	"github.com/syrilster/go-fx-fluctuation-alert-lambda/exchange"
+
+	pses "github.com/syrilster/go-fx-fluctuation-alert-lambda/pkg/ses"
+	"github.com/syrilster/go-fx-fluctuation-alert-lambda/pkg/store"
+	"github.com/syrilster/go-fx-fluctuation-alert-lambda/pkg/store/mocks"
 )
 
 const (
@@ -36,6 +39,26 @@ var dummyConfig = &Config{
 	UpperBound:       58,
 }
 
+type MockCurrencySaver struct {
+	CreateItemFn func(item store.Item) error
+	GetItemFn    func(hash string) (*store.Item, error)
+}
+
+func (m *MockCurrencySaver) CreateItem(item store.Item) error {
+	if m.CreateItemFn != nil {
+		return m.CreateItemFn(item)
+	}
+	return nil
+}
+
+// GetItem mocks the GetItem method.
+func (m *MockCurrencySaver) GetItem(hash string) (*store.Item, error) {
+	if m.GetItemFn != nil {
+		return m.GetItemFn(hash)
+	}
+	return nil, nil
+}
+
 type mockExchange struct {
 	GetExchangeRateFunc func(ctx context.Context, request exchange.Request) (float32, error)
 }
@@ -45,11 +68,11 @@ func (m *mockExchange) GetExchangeRate(ctx context.Context, request exchange.Req
 }
 
 type mockSES struct {
-	sendEmailFunc func(input *ses.SendEmailInput) (*ses.SendEmailOutput, error)
+	sendEmailFunc func(ctx context.Context, input *sesv2.SendEmailInput) (*sesv2.SendEmailOutput, error)
 }
 
-func (m *mockSES) SendEmail(input *ses.SendEmailInput) (*ses.SendEmailOutput, error) {
-	return m.sendEmailFunc(input)
+func (m *mockSES) SendEmail(ctx context.Context, input *sesv2.SendEmailInput) (*sesv2.SendEmailOutput, error) {
+	return m.sendEmailFunc(ctx, input)
 }
 
 func TestHandler(t *testing.T) {
@@ -92,98 +115,76 @@ func TestHandlerFailure(t *testing.T) {
 }
 
 func TestProcess(t *testing.T) {
-	var dummyStore = &dynamo.DynamoStore{
-		TableName: dummyTable,
-		DB: &dynamo.MockDynamoDB{
-			GetItemFn: func(input *dynamodb.GetItemInput) (*dynamodb.GetItemOutput, error) {
-				return &dynamodb.GetItemOutput{
-					Item: map[string]*dynamodb.AttributeValue{
-						"hash": {
-							S: aws.String(dummyHash),
-						},
-						"currency_value": {
-							N: aws.String(dummyCurrVal),
-						},
-					},
-				}, nil
-			},
-		},
-	}
-
-	var dummyFailStore = &dynamo.DynamoStore{
-		TableName: dummyTable,
-		DB: &dynamo.MockDynamoDB{
-			GetItemFn: func(input *dynamodb.GetItemInput) (*dynamodb.GetItemOutput, error) {
-				return nil, errors.New("dynamo unknown error")
-			},
-			PutItemFn: func(input *dynamodb.PutItemInput) (output *dynamodb.PutItemOutput, e error) {
-				if *input.TableName != dummyTable {
-					assert.Fail(t, "table name mismatch")
-				}
-
-				if *input.Item["hash"].S == "" {
-					assert.Fail(t, "key name mismatch")
-				}
-				return nil, errors.New("dynamo unknown error")
-			},
-		},
-	}
+	//store := &MockCurrencySaver{
+	//	GetItemFn: func(hash string) (*dynamo.Item, error) {
+	//		if hash == "" {
+	//			return nil, errors.New("item not found")
+	//		}
+	//		item := dynamo.Item{HashString: hash}
+	//		return &item, nil
+	//	},
+	//}
 
 	tests := []struct {
-		name      string
-		sesClient *pses.Client
-		store     *dynamo.DynamoStore
-		eClient   exchange.ClientInterface
-		request   exchange.Request
-		expectErr bool
+		name       string
+		sesClient  *pses.Client
+		eClient    exchange.ClientInterface
+		request    exchange.Request
+		mockReturn *dynamodb.GetItemOutput
+		mockError  error
+		putItemErr bool
+		expectErr  bool
+		err        error
 	}{
 		{
-			name:  "Success - When Hash entry already in DB",
-			store: dummyStore,
+			name: "Success - When Hash entry already in DB",
+			mockReturn: &dynamodb.GetItemOutput{
+				Item: map[string]types.AttributeValue{
+					"hash":           &types.AttributeValueMemberS{Value: "testHash"},
+					"currency_value": &types.AttributeValueMemberN{Value: "123.45"},
+					"expires_at":     &types.AttributeValueMemberN{Value: "1672531199"},
+				},
+			},
+			mockError: nil,
+			sesClient: &pses.Client{SES: &mockSES{sendEmailFunc: func(ctx context.Context, input *sesv2.SendEmailInput) (*sesv2.SendEmailOutput, error) {
+				return &sesv2.SendEmailOutput{}, nil
+			}}},
 			eClient: &mockExchange{GetExchangeRateFunc: func(ctx context.Context, request exchange.Request) (float32, error) {
 				return 59, nil
 			}},
 		},
 		{
-			name:  "Success - When exchange rate meets lower bound",
-			store: dummyStore,
+			name: "Success - When exchange rate meets lower bound",
+			mockReturn: &dynamodb.GetItemOutput{
+				Item: map[string]types.AttributeValue{
+					"hash":           &types.AttributeValueMemberS{Value: "testHash"},
+					"currency_value": &types.AttributeValueMemberN{Value: "123.45"},
+					"expires_at":     &types.AttributeValueMemberN{Value: "1672531199"},
+				},
+			},
+			mockError: nil,
 			eClient: &mockExchange{GetExchangeRateFunc: func(ctx context.Context, request exchange.Request) (float32, error) {
 				return 50, nil
 			}},
-			sesClient: &pses.Client{SES: &mockSES{sendEmailFunc: func(input *ses.SendEmailInput) (*ses.SendEmailOutput, error) {
-				return &ses.SendEmailOutput{}, nil
+			sesClient: &pses.Client{SES: &mockSES{sendEmailFunc: func(ctx context.Context, input *sesv2.SendEmailInput) (*sesv2.SendEmailOutput, error) {
+				return &sesv2.SendEmailOutput{}, nil
 			}}},
 		},
 		{
-			name:  "Success - When threshold not met",
-			store: dummyStore,
+			name:       "Success - When threshold not met",
+			mockReturn: &dynamodb.GetItemOutput{},
+			mockError:  nil,
 			eClient: &mockExchange{GetExchangeRateFunc: func(ctx context.Context, request exchange.Request) (float32, error) {
 				return 56, nil
 			}},
 		},
 		{
 			name: "Success - When Hash not in DB",
-			sesClient: &pses.Client{SES: &mockSES{sendEmailFunc: func(input *ses.SendEmailInput) (*ses.SendEmailOutput, error) {
-				return &ses.SendEmailOutput{}, nil
+			sesClient: &pses.Client{SES: &mockSES{sendEmailFunc: func(ctx context.Context, input *sesv2.SendEmailInput) (*sesv2.SendEmailOutput, error) {
+				return &sesv2.SendEmailOutput{}, nil
 			}}},
-			store: &dynamo.DynamoStore{
-				TableName: dummyTable,
-				DB: &dynamo.MockDynamoDB{
-					GetItemFn: func(input *dynamodb.GetItemInput) (*dynamodb.GetItemOutput, error) {
-						return nil, errors.New("dynamo unknown error")
-					},
-					PutItemFn: func(input *dynamodb.PutItemInput) (output *dynamodb.PutItemOutput, e error) {
-						if *input.TableName != dummyTable {
-							assert.Fail(t, "table name mismatch")
-						}
-
-						if *input.Item["hash"].S == "" {
-							assert.Fail(t, "key name mismatch")
-						}
-						return &dynamodb.PutItemOutput{}, nil
-					},
-				},
-			},
+			mockReturn: &dynamodb.GetItemOutput{},
+			mockError:  errors.New("something went wrong"),
 			eClient: &mockExchange{GetExchangeRateFunc: func(ctx context.Context, request exchange.Request) (float32, error) {
 				return 59, nil
 			}},
@@ -194,37 +195,54 @@ func TestProcess(t *testing.T) {
 				return 0, errors.New("something went wrong")
 			}},
 			expectErr: true,
+			err:       errors.New("error when getting the exchange rate"),
 		},
 		{
 			name: "FailureWhenCreateOpDB",
-			sesClient: &pses.Client{SES: &mockSES{sendEmailFunc: func(input *ses.SendEmailInput) (*ses.SendEmailOutput, error) {
-				return &ses.SendEmailOutput{}, nil
+			sesClient: &pses.Client{SES: &mockSES{sendEmailFunc: func(ctx context.Context, input *sesv2.SendEmailInput) (*sesv2.SendEmailOutput, error) {
+				return &sesv2.SendEmailOutput{}, nil
 			}}},
-			store: dummyFailStore,
+			mockReturn: &dynamodb.GetItemOutput{},
+			mockError:  errors.New("something went wrong"),
 			eClient: &mockExchange{GetExchangeRateFunc: func(ctx context.Context, request exchange.Request) (float32, error) {
 				return 59, nil
 			}},
-			expectErr: true,
+			putItemErr: true,
+			expectErr:  true,
+			err:        errors.New("error when checking threshold satisfied: something went wrong"),
 		},
 		{
 			name: "FailureWhenSESError",
-			sesClient: &pses.Client{SES: &mockSES{sendEmailFunc: func(input *ses.SendEmailInput) (*ses.SendEmailOutput, error) {
+			sesClient: &pses.Client{SES: &mockSES{sendEmailFunc: func(ctx context.Context, input *sesv2.SendEmailInput) (*sesv2.SendEmailOutput, error) {
 				return nil, errors.New("something went wrong")
 			}}},
-			store: dummyFailStore,
+			mockReturn: &dynamodb.GetItemOutput{},
+			mockError:  errors.New("something went wrong"),
 			eClient: &mockExchange{GetExchangeRateFunc: func(ctx context.Context, request exchange.Request) (float32, error) {
 				return 59, nil
 			}},
 			expectErr: true,
+			err:       errors.New("error when sending email: something went wrong"),
 		},
 	}
 
 	for _, test := range tests {
 		tt := test
 		t.Run(tt.name, func(t *testing.T) {
-			err := process(context.Background(), dummyConfig, tt.store, tt.sesClient, tt.eClient, tt.request)
+			var putItemErr error
+			mockDynamo := new(mocks.DynamoDB)
+			s := store.NewCurrencyStore("t", mockDynamo)
+			// Set up mock behavior
+			mockDynamo.On("GetItem", mock.Anything, mock.Anything).Return(tt.mockReturn, tt.mockError)
+			if tt.putItemErr {
+				putItemErr = errors.New("something went wrong")
+			}
+			mockDynamo.On("PutItem", mock.Anything, mock.Anything).Return(&dynamodb.PutItemOutput{}, putItemErr)
+
+			err := process(context.Background(), dummyConfig, s, tt.sesClient, tt.eClient, tt.request)
 			if tt.expectErr {
 				require.Error(t, err)
+				assert.Equal(t, tt.err.Error(), err.Error())
 			} else {
 				require.NoError(t, err)
 			}
@@ -233,11 +251,15 @@ func TestProcess(t *testing.T) {
 }
 
 func createTempFile(fileName string, content []byte) (f *os.File, err error) {
-	file, _ := ioutil.TempFile(os.TempDir(), fileName)
+	file, err := os.CreateTemp(os.TempDir(), fileName)
+	if err != nil {
+		return nil, err
+	}
 	defer func(file *os.File) {
 		_ = file.Close()
 	}(file)
 
+	// Write content to the temporary file
 	_, err = file.Write(content)
 	if err != nil {
 		return nil, err

@@ -1,0 +1,50 @@
+Index: .github/workflows/deploy.yml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>on:\n  workflow_run:\n    workflows: [\"Build and test Go\"]\n    types:\n      - completed\nname: deploy to lambda\njobs:\n  deploy_zip:\n    name: deploy lambda function\n    runs-on: ubuntu-latest\n    if: ${{ github.event.workflow_run.conclusion == 'success' }}\n    strategy:\n      matrix:\n        go-version: [1.22]\n    steps:\n      - name: checkout source code\n        uses: actions/checkout@v3\n      - name: Install Go\n        uses: actions/setup-go@v1\n        with:\n          go-version: ${{ matrix.go-version }}\n      - name: Build binary\n        run: |\n          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o fx_alert && zip deployment.zip fx_alert config/prod.yaml\n      - name: AWS Lambda deploy\n        if: github.ref == 'refs/heads/master'\n        uses: appleboy/lambda-action@v0.1.9\n        with:\n          aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}\n          aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}\n          aws_region: ${{ secrets.AWS_REGION }}\n          function_name: fx_alert\n          zip_file: deployment.zip\n          memory_size: 512\n          timeout: 5\n          handler: fx_alert\n          role: arn:aws:iam::215593062382:role/service-role/fx_alert-role-f0fh0zh4\n          runtime: provided.al2\n          dry_run: true\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/.github/workflows/deploy.yml b/.github/workflows/deploy.yml
+--- a/.github/workflows/deploy.yml	(revision 6534faa298f3c4f31c096374213712340c2c0348)
++++ b/.github/workflows/deploy.yml	(date 1710585578942)
+@@ -5,24 +5,12 @@
+       - completed
+ name: deploy to lambda
+ jobs:
+-  deploy_zip:
++  deploy:
+     name: deploy lambda function
+     runs-on: ubuntu-latest
+-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+-    strategy:
+-      matrix:
+-        go-version: [1.22]
+     steps:
+-      - name: checkout source code
+-        uses: actions/checkout@v3
+-      - name: Install Go
+-        uses: actions/setup-go@v1
+-        with:
+-          go-version: ${{ matrix.go-version }}
+-      - name: Build binary
+-        run: |
+-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o fx_alert && zip deployment.zip fx_alert config/prod.yaml
+-      - name: AWS Lambda deploy
++      - uses: actions/checkout@v3
++      - name: AWS Lambda Deploy
+         if: github.ref == 'refs/heads/master'
+         uses: appleboy/lambda-action@v0.1.9
+         with:
+@@ -30,10 +18,9 @@
+           aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+           aws_region: ${{ secrets.AWS_REGION }}
+           function_name: fx_alert
+-          zip_file: deployment.zip
+           memory_size: 512
+           timeout: 5
+           handler: fx_alert
+           role: arn:aws:iam::215593062382:role/service-role/fx_alert-role-f0fh0zh4
+-          runtime: provided.al2
++          runtime: provided.al2023
+           dry_run: true
