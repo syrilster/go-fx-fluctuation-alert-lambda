@@ -10,17 +10,17 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/sesv2"
+	"github.com/aws/aws-sdk-go-v2/service/sesv2/types"
 	"github.com/rs/zerolog/log"
-
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	pses "github.com/aws/aws-sdk-go/service/ses"
 
 	"github.com/syrilster/go-fx-fluctuation-alert-lambda/exchange"
 	"github.com/syrilster/go-fx-fluctuation-alert-lambda/http"
-	dynamo "github.com/syrilster/go-fx-fluctuation-alert-lambda/pkg/dynamodb"
 	"github.com/syrilster/go-fx-fluctuation-alert-lambda/pkg/ses"
+	dynamo "github.com/syrilster/go-fx-fluctuation-alert-lambda/pkg/store"
 )
 
 const (
@@ -42,14 +42,8 @@ type ExchangeResponse struct {
 	FXRate string `json:"conversion_multiple"`
 }
 
-type Item struct {
-	HashString    string  `json:"hash"`
-	CurrencyValue float32 `json:"currency_value"`
-	Expires       int64   `json:"expires_at"`
-}
-
 type DBService struct {
-	store dynamo.DBStore
+	store dynamo.CurrencySaver
 }
 
 var fromCurrency string
@@ -57,13 +51,13 @@ var toCurrency string
 var dbAmount float32
 
 // NewDBService is accepting interface here
-func NewDBService(s dynamo.DBStore) *DBService {
+func NewDBService(s dynamo.CurrencySaver) *DBService {
 	return &DBService{
 		store: s,
 	}
 }
 
-//Handler func for lambda
+// Handler func for lambda
 func Handler(ctx context.Context, request CustomEvent) error {
 	var err error
 	contextLogger := log.Ctx(ctx)
@@ -90,13 +84,20 @@ func Handler(ctx context.Context, request CustomEvent) error {
 		return errors.New(fmt.Sprint("error while loading env var UPPER_BOUND ", err))
 	}
 
-	dbSession := session.Must(session.NewSession(&aws.Config{
-		Region: aws.String(cfg.AWSRegion),
-	}))
-	dbClient := dynamo.NewStore(cfg.FXTableName, dynamodb.New(dbSession))
-
-	sesClient, err := ses.New(awsRegion)
+	_, err = config.LoadDefaultConfig(context.TODO(), config.WithRegion(awsRegion))
 	if err != nil {
+		log.Fatal().Msgf("failed to load AWS configuration: %v", err)
+		return err
+	}
+
+	currencyStore := dynamo.NewCurrencyStore(cfg.FXTableName, dynamodb.New(dynamodb.Options{Region: awsRegion}))
+
+	sesOptions := sesv2.Options{
+		Region: awsRegion,
+	}
+	sesClient, err := ses.New(sesOptions)
+	if err != nil {
+		log.Fatal().Msgf("failed to create SES client: %v", err)
 		return err
 	}
 
@@ -106,10 +107,10 @@ func Handler(ctx context.Context, request CustomEvent) error {
 		ToCurrency:   toCurrency,
 	}
 
-	return process(ctx, cfg, dbClient, sesClient, exchangeClient, req)
+	return process(ctx, cfg, currencyStore, sesClient, exchangeClient, req)
 }
 
-func process(ctx context.Context, cfg *Config, store *dynamo.DynamoStore, ses *ses.Client, eClient exchange.ClientInterface, request exchange.Request) error {
+func process(ctx context.Context, cfg *Config, store *dynamo.CurrencyStore, ses *ses.Client, eClient exchange.ClientInterface, request exchange.Request) error {
 	ctxLogger := log.Ctx(ctx)
 
 	log.Print("Calling exchange rate API")
@@ -122,14 +123,14 @@ func process(ctx context.Context, cfg *Config, store *dynamo.DynamoStore, ses *s
 
 	sendEmail, err := checkThresholdSatisfied(ctx, store, fxAmount, float32(cfg.LowerBound), float32(cfg.UpperBound), cfg.ThresholdPercent)
 	if err != nil {
-		return errors.New("internal: error checking threshold criteria")
+		return fmt.Errorf("error when checking threshold satisfied: %v", err)
 	}
 
 	if sendEmail {
 		log.Print("Attempting to send email notification")
 		err := sesSendEmail(ses, fxAmount, cfg.ToEmail)
 		if err != nil {
-			return errors.New("error when sending email")
+			return fmt.Errorf("error when sending email: %v", err)
 		}
 	} else {
 		log.Print("FX Alert threshold not met")
@@ -139,7 +140,7 @@ func process(ctx context.Context, cfg *Config, store *dynamo.DynamoStore, ses *s
 	return nil
 }
 
-func checkThresholdSatisfied(ctx context.Context, store *dynamo.DynamoStore, fxAmount, lowerBound, upperBound float32, thresholdPercent float64) (sendEmail bool, err error) {
+func checkThresholdSatisfied(ctx context.Context, store *dynamo.CurrencyStore, fxAmount, lowerBound, upperBound float32, thresholdPercent float64) (sendEmail bool, err error) {
 	ctxLogger := log.Ctx(ctx)
 	if fxAmount >= upperBound || fxAmount <= lowerBound {
 		log.Print("FX threshold satisfied")
@@ -189,10 +190,10 @@ func thresholdExceedsPercentVal(threshold float64, currentVal, existingVal float
 
 func (d *DBService) createItem(hash string, amount float32) error {
 	expires := getExpiryTime()
-	rec := Item{
-		hash,
-		amount,
-		expires,
+	rec := dynamo.Item{
+		HashString:    hash,
+		CurrencyValue: amount,
+		Expires:       expires,
 	}
 
 	err := d.store.CreateItem(rec)
@@ -204,37 +205,39 @@ func (d *DBService) createItem(hash string, amount float32) error {
 	return nil
 }
 
-func (d *DBService) getItem(hash string) (*Item, error) {
-	item := &Item{}
-
-	err := d.store.GetItem(hash, item)
+func (d *DBService) getItem(hash string) (*dynamo.Item, error) {
+	resp, err := d.store.GetItem(hash)
 	if err != nil {
 		log.Error().Err(err).Msg("dynamo getItem error")
-		return nil, err
+		return nil, fmt.Errorf("failed to get item: %w", err)
 	}
 
-	return item, nil
+	return resp, nil
 }
 
-func sesSendEmail(ses *ses.Client, amount float32, toEmail string) error {
-	emailParams := &pses.SendEmailInput{
-		Message: &pses.Message{
-			Subject: &pses.Content{
-				Data: aws.String(fromCurrency + " to " + toCurrency + " Alert"),
-			},
-			Body: &pses.Body{
-				Text: &pses.Content{
-					Data: aws.String(fromCurrency + " to " + toCurrency + " value is " + emailText + ". Current value is " + fmt.Sprintf("%f", amount)),
+func sesSendEmail(sesClient *ses.Client, amount float32, toEmail string) error {
+	// Construct the SendEmailInput
+	emailParams := &sesv2.SendEmailInput{
+		Content: &types.EmailContent{
+			Simple: &types.Message{
+				Subject: &types.Content{
+					Data: aws.String(fromCurrency + " to " + toCurrency + " Alert"),
+				},
+				Body: &types.Body{
+					Text: &types.Content{
+						Data: aws.String(fromCurrency + " to " + toCurrency + " value is " + emailText + ". Current value is " + fmt.Sprintf("%f", amount)),
+					},
 				},
 			},
 		},
-		Destination: &pses.Destination{
-			ToAddresses: []*string{aws.String(toEmail)},
+		Destination: &types.Destination{
+			ToAddresses: []string{toEmail},
 		},
-		Source: aws.String(toEmail),
+		FromEmailAddress: aws.String(toEmail),
 	}
 
-	_, err := ses.SendEmail(emailParams)
+	// Send the email
+	_, err := sesClient.SendEmail(context.TODO(), emailParams)
 	if err != nil {
 		return err
 	}
