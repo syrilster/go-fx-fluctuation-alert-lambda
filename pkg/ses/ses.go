@@ -2,6 +2,7 @@ package ses
 
 import (
 	"context"
+
 	"github.com/aws/aws-sdk-go-v2/service/sesv2"
 	"github.com/rs/zerolog/log"
 )

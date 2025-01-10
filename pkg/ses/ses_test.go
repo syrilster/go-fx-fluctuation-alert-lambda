@@ -1,22 +1,24 @@
 package ses
 
 import (
+	"context"
 	"errors"
+	"testing"
+
 	"github.com/aws/aws-sdk-go-v2/service/sesv2"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 type mockSES struct {
-	sendEmailFunc func(input *sesv2.SendEmailInput) (*sesv2.SendEmailOutput, error)
+	sendEmailFunc func(ctx context.Context, input *sesv2.SendEmailInput) (*sesv2.SendEmailOutput, error)
 }
 
-func (m *mockSES) SendEmail(input *sesv2.SendEmailInput) (*sesv2.SendEmailOutput, error) {
-	return m.sendEmailFunc(input)
+func (m *mockSES) SendEmail(ctx context.Context, input *sesv2.SendEmailInput) (*sesv2.SendEmailOutput, error) {
+	return m.sendEmailFunc(ctx, input)
 }
 
 func TestNew(t *testing.T) {
-	c, err := New("")
+	c, err := New(sesv2.Options{})
 	require.NoError(t, err)
 	require.NotNil(t, c)
 }
@@ -25,7 +27,7 @@ func TestSendEmail(t *testing.T) {
 	var dummyMsgID = new(string)
 	*dummyMsgID = "1234"
 	tests := []struct {
-		description string
+		name        string
 		mockClient  *Client
 		input       *sesv2.SendEmailInput
 		expected    *sesv2.SendEmailOutput
@@ -33,9 +35,9 @@ func TestSendEmail(t *testing.T) {
 		wantErr     bool
 	}{
 		{
-			description: "Success",
+			name: "Success",
 			mockClient: &Client{
-				SES: &mockSES{sendEmailFunc: func(input *sesv2.SendEmailInput) (*sesv2.SendEmailOutput, error) {
+				SES: &mockSES{sendEmailFunc: func(ctx context.Context, input *sesv2.SendEmailInput) (*sesv2.SendEmailOutput, error) {
 					return &sesv2.SendEmailOutput{MessageId: dummyMsgID}, nil
 				}},
 			},
@@ -44,9 +46,9 @@ func TestSendEmail(t *testing.T) {
 			wantErr:  false,
 		},
 		{
-			description: "Failure",
+			name: "Failure",
 			mockClient: &Client{
-				SES: &mockSES{sendEmailFunc: func(input *sesv2.SendEmailInput) (*sesv2.SendEmailOutput, error) {
+				SES: &mockSES{sendEmailFunc: func(ctx context.Context, input *sesv2.SendEmailInput) (*sesv2.SendEmailOutput, error) {
 					return nil, errors.New("something went wrong")
 				}},
 			},
@@ -55,12 +57,15 @@ func TestSendEmail(t *testing.T) {
 			wantErr:     false,
 		},
 	}
+
 	for _, tt := range tests {
-		got, err := tt.mockClient.SendEmail(tt.input)
-		if tt.wantErr {
-			require.EqualError(t, err, tt.expectedErr.Error())
-		} else {
-			require.Equal(t, got, tt.expected)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.mockClient.SendEmail(context.Background(), tt.input)
+			if tt.wantErr {
+				require.EqualError(t, err, tt.expectedErr.Error())
+			} else {
+				require.Equal(t, got, tt.expected)
+			}
+		})
 	}
 }

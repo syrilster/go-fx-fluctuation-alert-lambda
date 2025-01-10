@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog/log"
+
 	chttp "github.com/syrilster/go-fx-fluctuation-alert-lambda/http"
 )
 

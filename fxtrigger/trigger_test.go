@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"github.com/syrilster/go-fx-fluctuation-alert-lambda/exchange"
 
+	"github.com/syrilster/go-fx-fluctuation-alert-lambda/exchange"
 	pses "github.com/syrilster/go-fx-fluctuation-alert-lambda/pkg/ses"
 	"github.com/syrilster/go-fx-fluctuation-alert-lambda/pkg/store"
 	"github.com/syrilster/go-fx-fluctuation-alert-lambda/pkg/store/mocks"
