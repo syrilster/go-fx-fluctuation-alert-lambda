@@ -8,7 +8,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/rs/zerolog/log"
 )
 
 type CurrencyStore struct {
@@ -38,7 +37,6 @@ func NewCurrencyStore(t string, db dynamoDb) *CurrencyStore {
 func (d *CurrencyStore) CreateItem(item Item) error {
 	av, err := attributevalue.MarshalMap(item)
 	if err != nil || av == nil {
-		log.Error().Err(err).Msg("error in CreateItem to db")
 		return err
 	}
 
@@ -46,9 +44,9 @@ func (d *CurrencyStore) CreateItem(item Item) error {
 		TableName: aws.String(d.table), Item: av,
 	})
 	if err != nil {
-		log.Printf("Couldn't add item to table. Error: %v", err)
+		return err
 	}
-	return err
+	return nil
 }
 
 // GetItem gets items from a DynamoDB table based on a provided hash

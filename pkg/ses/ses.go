@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/aws/aws-sdk-go-v2/service/sesv2"
-	"github.com/rs/zerolog/log"
 )
 
 type SES interface {
@@ -32,7 +31,6 @@ func New(options sesv2.Options) (*Client, error) {
 func (c *ClientAdapter) SendEmail(ctx context.Context, input *sesv2.SendEmailInput) (*sesv2.SendEmailOutput, error) {
 	output, err := c.Client.SendEmail(ctx, input)
 	if err != nil {
-		log.Error().Err(err).Msg("error when sending email")
 		return nil, err
 	}
 	return output, nil

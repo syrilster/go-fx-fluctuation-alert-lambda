@@ -8,8 +8,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/rs/zerolog/log"
-
 	chttp "github.com/syrilster/go-fx-fluctuation-alert-lambda/http"
 )
 
@@ -32,7 +30,6 @@ type Client struct {
 }
 
 func (c *Client) GetExchangeRate(ctx context.Context, request Request) (float32, error) {
-	ctxLogger := log.Ctx(ctx)
 
 	defaultResp := float32(0)
 	httpRequest, err := http.NewRequest(http.MethodGet, c.buildCurrencyExchangeEndpoint(), nil)
@@ -42,7 +39,6 @@ func (c *Client) GetExchangeRate(ctx context.Context, request Request) (float32,
 
 	resp, err := c.HttpCommand.Do(httpRequest)
 	if err != nil {
-		ctxLogger.Error().Err(err).Msgf("there was an error calling the currency exchange API. %v", err)
 		return defaultResp, err
 	}
 
@@ -53,19 +49,16 @@ func (c *Client) GetExchangeRate(ctx context.Context, request Request) (float32,
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("status returned from currency exchange service %s", resp.Status)
 		return defaultResp, fmt.Errorf("currency exchange service returned status: %s", resp.Status)
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		ctxLogger.Error().Err(err).Msgf("error reading currency exchange service data resp body (%s)", err)
 		return defaultResp, err
 	}
 
 	r := &Response{}
 	if err := json.Unmarshal(body, r); err != nil {
-		ctxLogger.Error().Err(err).Msgf("there was an error un marshalling the currency exchange API resp. %v", err)
 		return defaultResp, err
 	}
 
