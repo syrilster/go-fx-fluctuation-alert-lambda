@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
+	"log/slog"
 	"math"
 	"os"
 	"strconv"
@@ -15,7 +16,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/sesv2"
 	"github.com/aws/aws-sdk-go-v2/service/sesv2/types"
-	"github.com/rs/zerolog/log"
 
 	"github.com/syrilster/go-fx-fluctuation-alert-lambda/exchange"
 	"github.com/syrilster/go-fx-fluctuation-alert-lambda/http"
@@ -60,33 +60,35 @@ func NewDBService(s dynamo.CurrencySaver) *DBService {
 // Handler func for lambda
 func Handler(ctx context.Context, request CustomEvent) error {
 	var err error
-	contextLogger := log.Ctx(ctx)
-	contextLogger.Info().Msgf("Inside the lambda handler at date: %s", getLocalTime())
-	contextLogger.Info().Msgf("Event Trigger: %s", request.Name)
+	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	// Attach logger to the context
+	ctxLogger := context.WithValue(ctx, "logger", log)
+	log.Info("Inside the lambda handler at date: ", slog.String("date", getLocalTime()))
+	log.Info(fmt.Sprintf("Event Trigger: %s", request.Name))
 
 	cfgPath := os.Getenv(configPathKey)
 
-	log.Print("Loading Config from path:", configPathKey)
+	log.Info(fmt.Sprintf("Loading Config from path: %s", configPathKey))
 	var c Config
 	cfg := c.getConfig(cfgPath)
 
-	log.Print("Config Loaded Successfully")
+	log.Info("Config Loaded Successfully")
 	cfg.ToEmail = os.Getenv("TO_EMAIL")
 	cfg.AppID = os.Getenv("APP_ID")
 	fromCurrency = os.Getenv("FROM_CURRENCY")
 	toCurrency = os.Getenv("TO_CURRENCY")
 
 	if cfg.LowerBound, err = strconv.ParseFloat(os.Getenv(lowerBound), 32); err != nil {
-		return errors.New(fmt.Sprint("error while loading env var LOWER_BOUND ", err))
+		return errors.New(fmt.Sprint("failed loading env var LOWER_BOUND ", err))
 	}
 
 	if cfg.UpperBound, err = strconv.ParseFloat(os.Getenv(upperBound), 32); err != nil {
-		return errors.New(fmt.Sprint("error while loading env var UPPER_BOUND ", err))
+		return errors.New(fmt.Sprint("failed loading env var UPPER_BOUND ", err))
 	}
 
 	_, err = config.LoadDefaultConfig(context.TODO(), config.WithRegion(awsRegion))
 	if err != nil {
-		log.Fatal().Msgf("failed to load AWS configuration: %v", err)
+		log.Error("failed to load AWS configuration:", slog.Any("error", err))
 		return err
 	}
 
@@ -97,7 +99,7 @@ func Handler(ctx context.Context, request CustomEvent) error {
 	}
 	sesClient, err := ses.New(sesOptions)
 	if err != nil {
-		log.Fatal().Msgf("failed to create SES client: %v", err)
+		log.Error("failed to create SES client:", slog.Any("error", err))
 		return err
 	}
 
@@ -107,56 +109,56 @@ func Handler(ctx context.Context, request CustomEvent) error {
 		ToCurrency:   toCurrency,
 	}
 
-	return process(ctx, cfg, currencyStore, sesClient, exchangeClient, req)
+	return process(ctxLogger, cfg, currencyStore, sesClient, exchangeClient, req)
 }
 
 func process(ctx context.Context, cfg *Config, store *dynamo.CurrencyStore, ses *ses.Client, eClient exchange.ClientInterface, request exchange.Request) error {
-	ctxLogger := log.Ctx(ctx)
+	log := loggerFromContext(ctx)
 
-	log.Print("Calling exchange rate API")
+	log.Info("Calling exchange rate API")
 	fxAmount, err := eClient.GetExchangeRate(ctx, request)
 	if err != nil {
-		ctxLogger.Error().Err(err).Msg("Error when getting the exchange rate")
-		return errors.New("error when getting the exchange rate")
+		log.Error("Error when getting the exchange rate", slog.Any("error", err))
+		return fmt.Errorf("failed to get the exchange rate: %v", err)
 	}
-	log.Printf("exchange rate API returned fx rate: %f", fxAmount)
 
+	log.Info(fmt.Sprintf("exchange rate API returned fx rate: %f", fxAmount))
 	sendEmail, err := checkThresholdSatisfied(ctx, store, fxAmount, float32(cfg.LowerBound), float32(cfg.UpperBound), cfg.ThresholdPercent)
 	if err != nil {
 		return fmt.Errorf("error when checking threshold satisfied: %v", err)
 	}
 
 	if sendEmail {
-		log.Print("Attempting to send email notification")
+		log.Info("Attempting to send email notification")
 		err := sesSendEmail(ses, fxAmount, cfg.ToEmail)
 		if err != nil {
 			return fmt.Errorf("error when sending email: %v", err)
 		}
 	} else {
-		log.Print("FX Alert threshold not met")
-		log.Printf("Current FX rate %v", fxAmount)
+		log.Info("FX Alert threshold not met")
+		log.Info(fmt.Sprintf("Current FX rate: %v", fxAmount))
 	}
 
 	return nil
 }
 
 func checkThresholdSatisfied(ctx context.Context, store *dynamo.CurrencyStore, fxAmount, lowerBound, upperBound float32, thresholdPercent float64) (sendEmail bool, err error) {
-	ctxLogger := log.Ctx(ctx)
+	log := loggerFromContext(ctx)
 	if fxAmount >= upperBound || fxAmount <= lowerBound {
-		log.Print("FX threshold satisfied")
-		log.Printf("Current FX rate %v", fxAmount)
+		log.Info("FX threshold satisfied")
+		log.Info(fmt.Sprintf("Current FX rate: %v", fxAmount))
 		if fxAmount <= lowerBound {
 			emailText = "LOW"
 		}
 
 		hashString := fmt.Sprint(hash())
-		ctxLogger.Info().Msgf("computed hash is %v", hashString)
+		log.Info(fmt.Sprintf("computed hash is: %s", hashString))
 		dbService := NewDBService(store)
-		dbItem, err := dbService.getItem(hashString)
+		dbItem, err := dbService.getItem(ctx, hashString)
 		if err != nil {
-			ctxLogger.Error().Err(err).Msg("key not found in DynamoDB")
-			log.Print("Creating an item in Dynamo with computed hash")
-			err := dbService.createItem(hashString, fxAmount)
+			log.Error("key not found in DynamoDB", slog.Any("error", err))
+			log.Info("Creating an item in Dynamo with computed hash")
+			err := dbService.createItem(ctx, hashString, fxAmount)
 			if err != nil {
 				return false, err
 			}
@@ -165,30 +167,32 @@ func checkThresholdSatisfied(ctx context.Context, store *dynamo.CurrencyStore, f
 		}
 
 		if dbItem != nil {
-			log.Printf("Found item in DB by hash value: %s", hashString)
+			log.Info(fmt.Sprintf("Found item in DB by hash value: %s", hashString))
 			dbAmount = dbItem.CurrencyValue
 		}
 
-		if thresholdExceedsPercentVal(thresholdPercent, fxAmount, dbAmount) {
+		if thresholdExceedsPercentVal(ctx, thresholdPercent, fxAmount, dbAmount) {
 			sendEmail = true
 		}
 	}
 	return sendEmail, nil
 }
 
-func thresholdExceedsPercentVal(threshold float64, currentVal, existingVal float32) bool {
+func thresholdExceedsPercentVal(ctx context.Context, threshold float64, currentVal, existingVal float32) bool {
+	log := loggerFromContext(ctx)
 	if currentVal == existingVal {
 		return false
 	}
 
-	log.Printf("Inside threshold func to check if threshold is greater than set percentage: %f", threshold)
+	log.Info(fmt.Sprintf("Inside threshold func to check if threshold is greater than set percentage: %f", threshold))
 	diff := math.Abs(float64(currentVal) - float64(existingVal))
 	delta := (diff / float64(existingVal)) * 100
-	log.Printf("percent diff with prev value is: %f", delta)
+	log.Info(fmt.Sprintf("percent diff with previous value is: %f", delta))
 	return delta > threshold
 }
 
-func (d *DBService) createItem(hash string, amount float32) error {
+func (d *DBService) createItem(ctx context.Context, hash string, amount float32) error {
+	log := loggerFromContext(ctx)
 	expires := getExpiryTime()
 	rec := dynamo.Item{
 		HashString:    hash,
@@ -198,17 +202,18 @@ func (d *DBService) createItem(hash string, amount float32) error {
 
 	err := d.store.CreateItem(rec)
 	if err != nil {
-		log.Error().Err(err).Msg("dynamo create item error")
+		log.Error("dynamo create item: ", slog.Any("error", err))
 		return err
 	}
 
 	return nil
 }
 
-func (d *DBService) getItem(hash string) (*dynamo.Item, error) {
+func (d *DBService) getItem(ctx context.Context, hash string) (*dynamo.Item, error) {
+	log := loggerFromContext(ctx)
 	resp, err := d.store.GetItem(hash)
 	if err != nil {
-		log.Error().Err(err).Msg("dynamo getItem error")
+		log.Error("dynamo getItem error:", slog.Any("error", err))
 		return nil, fmt.Errorf("failed to get item: %w", err)
 	}
 
@@ -275,4 +280,13 @@ func getExpiryTime() int64 {
 	}
 	t := time.Now().In(loc)
 	return t.Add(time.Duration(14) * time.Hour).Unix()
+}
+
+func loggerFromContext(ctx context.Context) *slog.Logger {
+	logger, ok := ctx.Value("logger").(*slog.Logger)
+	if !ok {
+		// Return a default logger if none is found
+		return slog.New(slog.NewTextHandler(os.Stdout, nil))
+	}
+	return logger
 }

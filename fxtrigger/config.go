@@ -1,9 +1,10 @@
 package fxtrigger
 
 import (
-	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
 	"io/ioutil"
+	"log/slog"
+	"os"
 	"path/filepath"
 )
 
@@ -20,15 +21,16 @@ type Config struct {
 }
 
 func (c *Config) getConfig(path string) *Config {
+	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	bytes, err := ioutil.ReadFile(filepath.Clean(path))
 	if err != nil {
-		log.Error().Err(err).Msg("Invalid Config Path")
+		log.Error("Invalid Config Path", slog.Any("error", err))
 		return nil
 	}
 
 	err = yaml.Unmarshal(bytes, c)
 	if err != nil {
-		log.Error().Err(err).Msg("Unable to marshall successfully")
+		log.Error("Unable to marshall successfully", slog.Any("error", err))
 		return nil
 	}
 	return c

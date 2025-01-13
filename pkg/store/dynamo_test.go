@@ -8,7 +8,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -57,7 +56,6 @@ func Test_CreateItem(t *testing.T) {
 
 			av, err := attributevalue.MarshalMap(tt.item)
 			if err != nil || av == nil {
-				log.Error().Err(err).Msg("error in CreateItem to db")
 				assert.FailNow(t, "error in test setup")
 			}
 			input := &dynamodb.PutItemInput{
@@ -127,7 +125,6 @@ func Test_GetItem(t *testing.T) {
 
 			av, err := attributevalue.MarshalMap(tt.input)
 			if err != nil || av == nil {
-				log.Error().Err(err).Msg("error in CreateItem to db")
 				assert.FailNow(t, "error in test setup")
 			}
 
