@@ -2,7 +2,6 @@ package fxtrigger
 
 import (
 	"gopkg.in/yaml.v3"
-	"io/ioutil"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -22,7 +21,7 @@ type Config struct {
 
 func (c *Config) getConfig(path string) *Config {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	bytes, err := ioutil.ReadFile(filepath.Clean(path))
+	bytes, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		log.Error("Invalid Config Path", slog.Any("error", err))
 		return nil

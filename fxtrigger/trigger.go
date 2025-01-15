@@ -28,9 +28,13 @@ const (
 	configPathKey = "CONFIG_PATH"
 	lowerBound    = "LOWER_BOUND"
 	upperBound    = "UPPER_BOUND"
+	loggerKey     = "logger"
 )
 
 var emailText = "HIGH"
+var fromCurrency string
+var toCurrency string
+var dbAmount float32
 
 type CustomEvent struct {
 	Name string `json:"name"`
@@ -46,10 +50,6 @@ type DBService struct {
 	store dynamo.CurrencySaver
 }
 
-var fromCurrency string
-var toCurrency string
-var dbAmount float32
-
 // NewDBService is accepting interface here
 func NewDBService(s dynamo.CurrencySaver) *DBService {
 	return &DBService{
@@ -62,13 +62,13 @@ func Handler(ctx context.Context, request CustomEvent) error {
 	var err error
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	// Attach logger to the context
-	ctxLogger := context.WithValue(ctx, "logger", log)
+	ctxLogger := context.WithValue(ctx, loggerKey, log)
 	log.Info("Inside the lambda handler at date: ", slog.String("date", getLocalTime()))
 	log.Info(fmt.Sprintf("Event Trigger: %s", request.Name))
 
 	cfgPath := os.Getenv(configPathKey)
 
-	log.Info(fmt.Sprintf("Loading Config from path: %s", configPathKey))
+	log.Info(fmt.Sprintf("Loading config values from path: %s", cfgPath))
 	var c Config
 	cfg := c.getConfig(cfgPath)
 
@@ -135,8 +135,7 @@ func process(ctx context.Context, cfg *Config, store *dynamo.CurrencyStore, ses 
 			return fmt.Errorf("error when sending email: %v", err)
 		}
 	} else {
-		log.Info("FX Alert threshold not met")
-		log.Info(fmt.Sprintf("Current FX rate: %v", fxAmount))
+		log.Info("FX alert threshold not met")
 	}
 
 	return nil
@@ -146,13 +145,12 @@ func checkThresholdSatisfied(ctx context.Context, store *dynamo.CurrencyStore, f
 	log := loggerFromContext(ctx)
 	if fxAmount >= upperBound || fxAmount <= lowerBound {
 		log.Info("FX threshold satisfied")
-		log.Info(fmt.Sprintf("Current FX rate: %v", fxAmount))
 		if fxAmount <= lowerBound {
 			emailText = "LOW"
 		}
 
 		hashString := fmt.Sprint(hash())
-		log.Info(fmt.Sprintf("computed hash is: %s", hashString))
+		log.Info(fmt.Sprintf("Computed hash value is: %s", hashString))
 		dbService := NewDBService(store)
 		dbItem, err := dbService.getItem(ctx, hashString)
 		if err != nil {
@@ -178,17 +176,17 @@ func checkThresholdSatisfied(ctx context.Context, store *dynamo.CurrencyStore, f
 	return sendEmail, nil
 }
 
-func thresholdExceedsPercentVal(ctx context.Context, threshold float64, currentVal, existingVal float32) bool {
+func thresholdExceedsPercentVal(ctx context.Context, thresholdPercent float64, currentVal, existingVal float32) bool {
 	log := loggerFromContext(ctx)
 	if currentVal == existingVal {
 		return false
 	}
 
-	log.Info(fmt.Sprintf("Inside threshold func to check if threshold is greater than set percentage: %f", threshold))
+	log.Info(fmt.Sprintf("checking if thresholdPercent is greater than set percentage: %f", thresholdPercent))
 	diff := math.Abs(float64(currentVal) - float64(existingVal))
 	delta := (diff / float64(existingVal)) * 100
 	log.Info(fmt.Sprintf("percent diff with previous value is: %f", delta))
-	return delta > threshold
+	return delta > thresholdPercent
 }
 
 func (d *DBService) createItem(ctx context.Context, hash string, amount float32) error {
@@ -283,7 +281,7 @@ func getExpiryTime() int64 {
 }
 
 func loggerFromContext(ctx context.Context) *slog.Logger {
-	logger, ok := ctx.Value("logger").(*slog.Logger)
+	logger, ok := ctx.Value(loggerKey).(*slog.Logger)
 	if !ok {
 		// Return a default logger if none is found
 		return slog.New(slog.NewTextHandler(os.Stdout, nil))

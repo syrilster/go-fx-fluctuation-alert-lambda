@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strings"
 
@@ -52,7 +52,7 @@ func (c *Client) GetExchangeRate(ctx context.Context, request Request) (float32,
 		return defaultResp, fmt.Errorf("currency exchange service returned status: %s", resp.Status)
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return defaultResp, err
 	}
