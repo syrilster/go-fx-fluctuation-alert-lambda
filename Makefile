@@ -1,3 +1,4 @@
+SHELL := /bin/bash
 COVER_FILE?=./gen/coverage.out
 COVER_TEXT?=./gen/coverage.txt
 COVER_HTML?=./gen/coverage.html
