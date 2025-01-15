@@ -3,7 +3,6 @@ COVER_TEXT?=./gen/coverage.txt
 COVER_HTML?=./gen/coverage.html
 APP?=fx-fluctuation-alert-lambda
 export GO111MODULE=on
-export GOFLAGS=-mod=vendor
 
 update-vendor:
 	go mod tidy
