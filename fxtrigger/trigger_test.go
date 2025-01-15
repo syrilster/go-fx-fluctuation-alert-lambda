@@ -195,7 +195,7 @@ func TestProcess(t *testing.T) {
 				return 0, errors.New("something went wrong")
 			}},
 			expectErr: true,
-			err:       errors.New("failed to get the exchange rate"),
+			err:       errors.New("failed to get the exchange rate: something went wrong"),
 		},
 		{
 			name: "FailureWhenCreateOpDB",

@@ -1,3 +1,4 @@
+SHELL := /bin/bash
 COVER_FILE?=./gen/coverage.out
 COVER_TEXT?=./gen/coverage.txt
 COVER_HTML?=./gen/coverage.html
@@ -16,7 +17,7 @@ sonar:
 
 test:
 	mkdir -p gen
-	go test -short `go list ./... | grep -vE "./test"` \
+	set -o pipefail; go test -short `go list ./... | grep -vE "./test"` \
 	        -race -covermode=atomic -json \
 	        -coverprofile=$(COVER_FILE) \
 	        | tee $(TEST_JSON)
