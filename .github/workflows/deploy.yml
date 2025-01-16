@@ -24,7 +24,7 @@ jobs:
           GOOS=linux GOARCH=arm64 go build -o bootstrap FxTrigger.go && zip deployment.zip bootstrap config/prod.yaml
       - name: AWS Lambda Deploy
         if: github.ref == 'refs/heads/master'
-        uses: appleboy/lambda-action@v0.1.9
+        uses: appleboy/lambda-action@v0.2.0
         with:
           aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -36,4 +36,6 @@ jobs:
           handler: fx_alert
           role: arn:aws:iam::215593062382:role/service-role/fx_alert-role-f0fh0zh4
           runtime: provided.al2023
-          dry_run: true
+          dry_run: false
+          debug: true
+          publish: true
