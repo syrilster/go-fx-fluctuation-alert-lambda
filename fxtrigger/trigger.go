@@ -84,20 +84,17 @@ func Handler(ctx context.Context, request CustomEvent) error {
 	if cfg.UpperBound, err = strconv.ParseFloat(os.Getenv(upperBound), 32); err != nil {
 		return errors.New(fmt.Sprint("failed loading env var UPPER_BOUND ", err))
 	}
+
 	awsCfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(awsRegion))
 	if err != nil {
-		log.Error("failed to load AWS configuration:", slog.Any("error", err))
+		log.Error("failed to load AWS configuration", slog.Any("error", err))
 		return err
 	}
 
 	currencyStore := store.NewCurrencyStore(cfg.FXTableName, dynamodb.NewFromConfig(awsCfg))
-
-	sesOptions := sesv2.Options{
-		Region: awsRegion,
-	}
-	sesClient, err := ses.New(sesOptions)
+	sesClient, err := ses.New(awsCfg)
 	if err != nil {
-		log.Error("failed to create SES client:", slog.Any("error", err))
+		log.Error("failed to create SES client", slog.Any("error", err))
 		return err
 	}
 
@@ -123,14 +120,14 @@ func process(ctx context.Context, cfg *Config, store *store.CurrencyStore, ses *
 	log.Info(fmt.Sprintf("exchange rate API returned fx rate: %f", fxAmount))
 	sendEmail, err := checkThresholdSatisfied(ctx, store, fxAmount, float32(cfg.LowerBound), float32(cfg.UpperBound), cfg.ThresholdPercent)
 	if err != nil {
-		return fmt.Errorf("error when checking threshold satisfied: %v", err)
+		return fmt.Errorf("failed to check threshold: %v", err)
 	}
 
 	if sendEmail {
-		log.Info("Attempting to send email notification")
+		log.Info("Send email notification")
 		err := sesSendEmail(ses, fxAmount, cfg.ToEmail)
 		if err != nil {
-			return fmt.Errorf("error when sending email: %v", err)
+			return fmt.Errorf("failed to send email: %v", err)
 		}
 	} else {
 		log.Info("FX alert threshold not met")
@@ -198,7 +195,7 @@ func (d *DBService) createItem(ctx context.Context, hash string, amount float32)
 
 	err := d.store.CreateItem(rec)
 	if err != nil {
-		log.Error("dynamo create item: ", slog.Any("error", err))
+		log.Error("dynamo create item error", slog.Any("error", err))
 		return err
 	}
 
@@ -209,7 +206,7 @@ func (d *DBService) getItem(ctx context.Context, hash string) (*store.Item, erro
 	log := loggerFromContext(ctx)
 	resp, err := d.store.GetItem(hash)
 	if err != nil {
-		log.Error("dynamo getItem error:", slog.Any("error", err))
+		log.Error("dynamo getItem error", slog.Any("error", err))
 		return nil, fmt.Errorf("failed to get item: %w", err)
 	}
 

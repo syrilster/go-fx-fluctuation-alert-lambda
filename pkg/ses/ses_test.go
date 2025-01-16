@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/sesv2"
 	"github.com/stretchr/testify/require"
 )
@@ -18,7 +19,7 @@ func (m *mockSES) SendEmail(ctx context.Context, input *sesv2.SendEmailInput) (*
 }
 
 func TestNew(t *testing.T) {
-	c, err := New(sesv2.Options{})
+	c, err := New(aws.Config{Region: "ap-south-1"})
 	require.NoError(t, err)
 	require.NotNil(t, c)
 }
