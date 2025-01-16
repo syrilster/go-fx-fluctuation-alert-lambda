@@ -20,7 +20,7 @@ import (
 	"github.com/syrilster/go-fx-fluctuation-alert-lambda/exchange"
 	"github.com/syrilster/go-fx-fluctuation-alert-lambda/http"
 	"github.com/syrilster/go-fx-fluctuation-alert-lambda/pkg/ses"
-	dynamo "github.com/syrilster/go-fx-fluctuation-alert-lambda/pkg/store"
+	"github.com/syrilster/go-fx-fluctuation-alert-lambda/pkg/store"
 )
 
 const (
@@ -47,11 +47,11 @@ type ExchangeResponse struct {
 }
 
 type DBService struct {
-	store dynamo.CurrencySaver
+	store store.CurrencySaver
 }
 
 // NewDBService is accepting interface here
-func NewDBService(s dynamo.CurrencySaver) *DBService {
+func NewDBService(s store.CurrencySaver) *DBService {
 	return &DBService{
 		store: s,
 	}
@@ -63,8 +63,7 @@ func Handler(ctx context.Context, request CustomEvent) error {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	// Attach logger to the context
 	ctxLogger := context.WithValue(ctx, loggerKey, log)
-	log.Info("Inside the lambda handler at date: ", slog.String("date", getLocalTime()))
-	log.Info(fmt.Sprintf("Event Trigger: %s", request.Name))
+	log.Info("Inside the lambda handler", slog.String("date", getLocalTime()))
 
 	cfgPath := os.Getenv(configPathKey)
 
@@ -85,14 +84,13 @@ func Handler(ctx context.Context, request CustomEvent) error {
 	if cfg.UpperBound, err = strconv.ParseFloat(os.Getenv(upperBound), 32); err != nil {
 		return errors.New(fmt.Sprint("failed loading env var UPPER_BOUND ", err))
 	}
-
-	_, err = config.LoadDefaultConfig(context.TODO(), config.WithRegion(awsRegion))
+	awsCfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(awsRegion))
 	if err != nil {
 		log.Error("failed to load AWS configuration:", slog.Any("error", err))
 		return err
 	}
 
-	currencyStore := dynamo.NewCurrencyStore(cfg.FXTableName, dynamodb.New(dynamodb.Options{Region: awsRegion}))
+	currencyStore := store.NewCurrencyStore(cfg.FXTableName, dynamodb.NewFromConfig(awsCfg))
 
 	sesOptions := sesv2.Options{
 		Region: awsRegion,
@@ -112,7 +110,7 @@ func Handler(ctx context.Context, request CustomEvent) error {
 	return process(ctxLogger, cfg, currencyStore, sesClient, exchangeClient, req)
 }
 
-func process(ctx context.Context, cfg *Config, store *dynamo.CurrencyStore, ses *ses.Client, eClient exchange.ClientInterface, request exchange.Request) error {
+func process(ctx context.Context, cfg *Config, store *store.CurrencyStore, ses *ses.Client, eClient exchange.ClientInterface, request exchange.Request) error {
 	log := loggerFromContext(ctx)
 
 	log.Info("Calling exchange rate API")
@@ -141,7 +139,7 @@ func process(ctx context.Context, cfg *Config, store *dynamo.CurrencyStore, ses 
 	return nil
 }
 
-func checkThresholdSatisfied(ctx context.Context, store *dynamo.CurrencyStore, fxAmount, lowerBound, upperBound float32, thresholdPercent float64) (sendEmail bool, err error) {
+func checkThresholdSatisfied(ctx context.Context, store *store.CurrencyStore, fxAmount, lowerBound, upperBound float32, thresholdPercent float64) (sendEmail bool, err error) {
 	log := loggerFromContext(ctx)
 	if fxAmount >= upperBound || fxAmount <= lowerBound {
 		log.Info("FX threshold satisfied")
@@ -192,7 +190,7 @@ func thresholdExceedsPercentVal(ctx context.Context, thresholdPercent float64, c
 func (d *DBService) createItem(ctx context.Context, hash string, amount float32) error {
 	log := loggerFromContext(ctx)
 	expires := getExpiryTime()
-	rec := dynamo.Item{
+	rec := store.Item{
 		HashString:    hash,
 		CurrencyValue: amount,
 		Expires:       expires,
@@ -207,7 +205,7 @@ func (d *DBService) createItem(ctx context.Context, hash string, amount float32)
 	return nil
 }
 
-func (d *DBService) getItem(ctx context.Context, hash string) (*dynamo.Item, error) {
+func (d *DBService) getItem(ctx context.Context, hash string) (*store.Item, error) {
 	log := loggerFromContext(ctx)
 	resp, err := d.store.GetItem(hash)
 	if err != nil {
