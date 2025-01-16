@@ -209,7 +209,7 @@ func TestProcess(t *testing.T) {
 			}},
 			putItemErr: true,
 			expectErr:  true,
-			err:        errors.New("error when checking threshold satisfied: something went wrong"),
+			err:        errors.New("failed to check threshold: something went wrong"),
 		},
 		{
 			name: "FailureWhenSESError",
@@ -222,7 +222,7 @@ func TestProcess(t *testing.T) {
 				return 59, nil
 			}},
 			expectErr: true,
-			err:       errors.New("error when sending email: something went wrong"),
+			err:       errors.New("failed to send email: something went wrong"),
 		},
 	}
 
