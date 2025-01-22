@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/syrilster/go-fx-fluctuation-alert-lambda/pkg/store/mocks"
+	"github.com/syrilster/go-fx-fluctuation-alert-lambda/internal/store/mocks"
 )
 
 type DBService struct {

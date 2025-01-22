@@ -1,8 +1,8 @@
-package http
+package exchange
 
 import "net/http"
 
-type Client interface {
+type HttpClient interface {
 	Do(req *http.Request) (resp *http.Response, err error)
 }
 

@@ -10,9 +10,21 @@ jobs:
     name: SonarQube
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Check out source code
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
+
+      - name: Unit Tests
+        env:
+          GOPROXY: "https://proxy.golang.org"
+        run: make test
+
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v4
         env:
