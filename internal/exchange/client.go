@@ -7,26 +7,24 @@ import (
 	"io"
 	"net/http"
 	"strings"
-
-	chttp "github.com/syrilster/go-fx-fluctuation-alert-lambda/http"
 )
 
 type ClientInterface interface {
 	GetExchangeRate(ctx context.Context, request Request) (float32, error)
 }
 
-func NewClient(endpoint string, h chttp.Client, appID string) *Client {
+func NewClient(endpoint string, h HttpClient, appID string) *Client {
 	return &Client{
-		URL:         endpoint,
-		HttpCommand: h,
-		AppID:       appID,
+		URL:        endpoint,
+		HttpClient: h,
+		AppID:      appID,
 	}
 }
 
 type Client struct {
-	URL         string
-	HttpCommand chttp.Client
-	AppID       string
+	URL        string
+	HttpClient HttpClient
+	AppID      string
 }
 
 func (c *Client) GetExchangeRate(ctx context.Context, request Request) (float32, error) {
@@ -37,7 +35,7 @@ func (c *Client) GetExchangeRate(ctx context.Context, request Request) (float32,
 		return defaultResp, err
 	}
 
-	resp, err := c.HttpCommand.Do(httpRequest)
+	resp, err := c.HttpClient.Do(httpRequest)
 	if err != nil {
 		return defaultResp, err
 	}

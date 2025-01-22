@@ -17,10 +17,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sesv2"
 	"github.com/aws/aws-sdk-go-v2/service/sesv2/types"
 
-	"github.com/syrilster/go-fx-fluctuation-alert-lambda/exchange"
-	"github.com/syrilster/go-fx-fluctuation-alert-lambda/http"
-	"github.com/syrilster/go-fx-fluctuation-alert-lambda/pkg/ses"
-	"github.com/syrilster/go-fx-fluctuation-alert-lambda/pkg/store"
+	"github.com/syrilster/go-fx-fluctuation-alert-lambda/internal/exchange"
+	"github.com/syrilster/go-fx-fluctuation-alert-lambda/internal/ses"
+	"github.com/syrilster/go-fx-fluctuation-alert-lambda/internal/store"
 )
 
 const (
@@ -98,7 +97,7 @@ func Handler(ctx context.Context, request CustomEvent) error {
 		return err
 	}
 
-	exchangeClient := exchange.NewClient(cfg.ExchangeEndpoint, http.New(), cfg.AppID)
+	exchangeClient := exchange.NewClient(cfg.ExchangeEndpoint, exchange.New(), cfg.AppID)
 	req := exchange.Request{
 		FromCurrency: fromCurrency,
 		ToCurrency:   toCurrency,
