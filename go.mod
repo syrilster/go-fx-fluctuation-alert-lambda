@@ -8,7 +8,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.32.1
 	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.20.25
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.53.1
-	github.com/aws/aws-sdk-go-v2/service/sesv2 v1.55.0
+	github.com/aws/aws-sdk-go-v2/service/sesv2 v1.55.1
 	github.com/stretchr/testify v1.11.1
 	gopkg.in/yaml.v3 v3.0.1
 )
