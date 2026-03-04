@@ -3,7 +3,7 @@ module github.com/syrilster/go-fx-fluctuation-alert-lambda
 go 1.24
 
 require (
-	github.com/aws/aws-lambda-go v1.52.0
+	github.com/aws/aws-lambda-go v1.53.0
 	github.com/aws/aws-sdk-go-v2 v1.41.3
 	github.com/aws/aws-sdk-go-v2/config v1.32.9
 	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.20.33
